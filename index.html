@@ -710,41 +710,51 @@ function renderEntries(arr, containerId) {
 }
 
 // === RENDER: Folders ===
+let foldersTab = 'my';
+
 function renderFolders() {
   const el = document.getElementById('foldersList');
-  let html = '<div style="padding:8px 0;display:flex;gap:8px">';
-  html += '<button onclick="showCreateFolder()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">➕ Создать папку</button>';
-  if (state.friends && state.friends.length) {
-    html += '<button onclick="showSharedFolders()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">👥 Общие</button>';
-  }
+  
+  // Tabs
+  let html = '<div style="display:flex;gap:4px;margin-bottom:10px">';
+  html += `<div onclick="foldersTab='my';renderFolders()" style="flex:1;padding:8px;border-radius:8px;text-align:center;font-size:13px;font-weight:500;cursor:pointer;background:${foldersTab==='my'?'var(--accent)':'var(--surface)'};color:${foldersTab==='my'?'#fff':'var(--text-secondary)'}">📂 Мои</div>`;
+  html += `<div onclick="foldersTab='shared';renderFolders()" style="flex:1;padding:8px;border-radius:8px;text-align:center;font-size:13px;font-weight:500;cursor:pointer;background:${foldersTab==='shared'?'var(--accent)':'var(--surface)'};color:${foldersTab==='shared'?'#fff':'var(--text-secondary)'}">🔗 Общие (${(state.sharedFolders||[]).length})</div>`;
   html += '</div>';
   
-  if (!state.folders.length) {
-    html += '<div class="empty"><div class="icon">📂</div><div class="t">Нет папок</div><div class="d">Создай первую папку</div></div>';
-    el.innerHTML = html;
-    return;
-  }
-  
-  // Show shared folders at top
-  if (state.sharedFolders && state.sharedFolders.length) {
-    html += '<div style="font-size:12px;color:var(--text-muted);padding:8px 0 4px;font-weight:500">ОБЩИЕ ПАПКИ</div>';
-    state.sharedFolders.forEach(f => {
-      html += `<div class="folder-item" onclick="openSharedFolder(${f.id})">
+  if (foldersTab === 'my') {
+    html += '<button onclick="showCreateFolder()" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">➕ Создать папку</button>';
+    
+    if (!state.folders.length) {
+      html += '<div class="empty"><div class="icon">📂</div><div class="t">Нет папок</div></div>';
+      el.innerHTML = html;
+      return;
+    }
+    
+    html += state.folders.map(f => `
+      <div class="folder-item" style="position:relative">
+        <div style="flex:1;display:flex;align-items:center" onclick="openFolder(${f.id})">
+          <span class="fi">${f.icon}</span>
+          <span class="fn">${esc(f.name)}</span>
+          <span class="fc">${f.count} зап.</span>
+        </div>
+        <button class="card-menu" onclick="event.stopPropagation();openFolderMenu(${f.id},'${esc(f.name)}')">⋯</button>
+      </div>`
+    ).join('');
+  } else {
+    if (!state.sharedFolders || !state.sharedFolders.length) {
+      html += '<div class="empty"><div class="icon">🔗</div><div class="t">Нет общих папок</div></div>';
+      el.innerHTML = html;
+      return;
+    }
+    html += state.sharedFolders.map(f =>
+      `<div class="folder-item" onclick="openSharedFolder(${f.id})">
         <span class="fi">📁</span>
         <span class="fn">${esc(f.name)} 🔗</span>
         <span class="fc">Общая</span>
-      </div>`;
-    });
+      </div>`
+    ).join('');
   }
   
-  html += '<div style="font-size:12px;color:var(--text-muted);padding:8px 0 4px;font-weight:500">МОИ ПАПКИ</div>';
-  html += state.folders.map(f =>
-    `<div class="folder-item" onclick="openFolder(${f.id})">
-      <span class="fi">${f.icon}</span>
-      <span class="fn">${esc(f.name)}</span>
-      <span class="fc">${f.count} зап.</span>
-    </div>`
-  ).join('');
   el.innerHTML = html;
 }
 
@@ -810,6 +820,58 @@ function openContextMenu(id) {
 
 function closeContextMenu() {
   document.getElementById('contextMenu').classList.remove('open');
+}
+
+// === FOLDER CONTEXT MENU ===
+function openFolderMenu(id, name) {
+  const items = `
+    <button class="context-item" onclick="renameFolder(${id})">✏️ Переименовать</button>
+    <button class="context-item" onclick="deleteFolder(${id})">🗑️ Удалить папку</button>
+    <button class="context-item" onclick="shareFolderPrompt(${id})">🔗 Расшарить другу</button>
+  `;
+  document.getElementById('contextSheet').innerHTML = items;
+  document.getElementById('contextMenu').classList.add('open');
+}
+
+function renameFolder(id) {
+  closeContextMenu();
+  const name = prompt('Новое название:');
+  if (!name || !name.trim()) return;
+  fetch(API + 'folder/rename', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({user_id: state.dbId, folder_id: id, name: name.trim()})
+  }).then(r=>r.json()).then(d => {
+    if (d.ok) { showToast('✅ Переименовано'); loadData(); }
+    else { showToast('❌ Ошибка'); }
+  }).catch(() => showToast('❌ Ошибка'));
+}
+
+function deleteFolder(id) {
+  closeContextMenu();
+  if (!confirm('Удалить папку? Записи останутся без папки.')) return;
+  fetch(API + 'folder/delete', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({user_id: state.dbId, folder_id: id})
+  }).then(r=>r.json()).then(d => {
+    if (d.ok) { showToast('✅ Папка удалена'); loadData(); }
+    else { showToast('❌ Ошибка'); }
+  }).catch(() => showToast('❌ Ошибка'));
+}
+
+function shareFolderPrompt(id) {
+  closeContextMenu();
+  const friendId = prompt('Telegram ID друга:');
+  if (!friendId || !/^\\d+$/.test(friendId)) { showToast('❌ Некорректный ID'); return; }
+  fetch(API + 'folder/share', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({user_id: state.dbId, folder_id: id, friend_id: parseInt(friendId)})
+  }).then(r=>r.json()).then(d => {
+    if (d.ok) { showToast('✅ Папка открыта другу!'); }
+    else { showToast('❌ Ошибка'); }
+  }).catch(() => showToast('❌ Ошибка'));
 }
 
 async function moveEntryToFolder(entryId, folderId) {
