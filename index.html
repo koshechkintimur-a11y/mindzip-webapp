@@ -881,30 +881,80 @@ async function filterByType(type) {
 }
 
 // === RENDER: Settings ===
-function renderSettings() {
+let settingsTab = 'stats';
+
+function renderSettings(tab) {
+  tab = tab || settingsTab;
+  settingsTab = tab;
   const s = state.stats;
   if (!s) return;
   
-  const typeEmoji = { text:'📝', voice:'🎤', photo:'📷', video:'🎥', link:'🔗', file:'📎', forwarded:'📨' };
-  const types = Object.entries(s.by_type || {}).map(([t,c]) =>
-    `<div class="setting-card"><div class="sl">${typeEmoji[t]||'📄'} ${t}</div><div class="sv">${c} зап.</div></div>`
-  ).join('');
+  const tabs = [
+    {id:'stats', label:'📊 Статистика'},
+    {id:'friends', label:'👥 Друзья'},
+    {id:'referral', label:'🔗 Рефералка'},
+    {id:'support', label:'💬 Поддержка'},
+  ];
   
-  const friendsCount = (state.friends||[]).length;
-  const sharedCount = (state.sharedFolders||[]).length;
+  let html = '<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto">';
+  tabs.forEach(t => {
+    const active = t.id === tab ? 'var(--accent)' : 'var(--surface)';
+    const color = t.id === tab ? '#fff' : 'var(--text-secondary)';
+    html += `<div onclick="renderSettings('${t.id}')" style="flex-shrink:0;padding:8px 14px;border-radius:8px;background:${active};color:${color};font-size:13px;font-weight:500;cursor:pointer;transition:.15s">${t.label}</div>`;
+  });
+  html += '</div>';
   
-  document.getElementById('settingsContent').innerHTML = `
-    <div class="setting-card" style="cursor:pointer" onclick="filterByType('all');switchTab('home')"><div class="sl">🧠 Всего записей</div><div class="sv">${s.total}</div></div>
-    <div class="setting-card" style="cursor:pointer" onclick="filterByType('favorites');switchTab('home')"><div class="sl">⭐ В избранном</div><div class="sv">${s.favorites}</div></div>
-    <div class="setting-card" style="cursor:pointer" onclick="filterByType('week');switchTab('home')"><div class="sl">📅 За неделю</div><div class="sv">${s.this_week}</div></div>
-    <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">По типам</div>
-    ${types}
-    <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">👥 Друзья</div>
-    <div class="setting-card" style="cursor:pointer" onclick="showFriends()"><div class="sl">👥 Друзья</div><div class="sv">${friendsCount ? friendsCount + ' друзей' : 'Нет друзей'}</div></div>
-    <div class="setting-card" style="cursor:pointer" onclick="showSharedFolders()"><div class="sl">📂 Общие папки</div><div class="sv">${sharedCount ? sharedCount + ' папок' : 'Нет общих папок'}</div></div>
-    <div class="setting-card" style="cursor:pointer;margin-top:16px" onclick="showToast('Используй /export_cal в боте')"><div class="sl">📅 Экспорт в календарь</div><div class="sv">.ics / Google Calendar</div></div>
-    <div class="setting-card" style="cursor:pointer" onclick="showToast('Напиши @mindzip_support_bot')"><div class="sl">💬 Поддержка</div><div class="sv">@mindzip_support_bot</div></div>
-  `;
+  if (tab === 'stats') {
+    const typeEmoji = { text:'📝', voice:'🎤', photo:'📷', video:'🎥', link:'🔗', file:'📎', forwarded:'📨' };
+    const types = Object.entries(s.by_type || {}).map(([t,c]) =>
+      `<div class="setting-card" style="cursor:pointer" onclick="filterByType('${t}');switchTab('home')"><div class="sl">${typeEmoji[t]||'📄'} ${t}</div><div class="sv">${c} зап.</div></div>`
+    ).join('');
+    
+    html += `
+      <div class="setting-card" style="cursor:pointer" onclick="filterByType('all');switchTab('home')"><div class="sl">🧠 Всего записей</div><div class="sv">${s.total}</div></div>
+      <div class="setting-card" style="cursor:pointer" onclick="filterByType('favorites');switchTab('home')"><div class="sl">⭐ В избранном</div><div class="sv">${s.favorites}</div></div>
+      <div class="setting-card" style="cursor:pointer" onclick="filterByType('week');switchTab('home')"><div class="sl">📅 За неделю</div><div class="sv">${s.this_week}</div></div>
+      <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--text-muted);letter-spacing:.5px">ПО ТИПАМ</div>
+      ${types}
+    `;
+  } else if (tab === 'friends') {
+    const friendsCount = (state.friends||[]).length;
+    const sharedCount = (state.sharedFolders||[]).length;
+    html += `
+      <div class="setting-card" style="cursor:pointer" onclick="showFriends()"><div class="sl">👥 Друзья (${friendsCount})</div><div class="sv">${friendsCount ? friendsCount + ' друзей' : 'Нет друзей'}</div></div>
+      <div class="setting-card" style="cursor:pointer" onclick="showSharedFolders()"><div class="sl">📂 Общие папки</div><div class="sv">${sharedCount ? sharedCount + ' папок' : 'Нет общих папок'}</div></div>
+      <div style="margin-top:12px;padding:12px;background:var(--surface);border-radius:8px;font-size:13px;color:var(--text-secondary);line-height:1.6">
+        <b>Как добавить друга:</b><br>
+        1. Узнай Telegram ID друга (через @userinfobot)<br>
+        2. Напиши боту: /add_friend 123456789<br>
+        3. Друг подтверждает: /accept_friend ТВОЙ_ID<br>
+        4. Делитесь папками: /share_folder ID_ПАПКИ ID_ДРУГА
+      </div>
+    `;
+  } else if (tab === 'referral') {
+    html += '<div id="referralContent"><div class="loading"><div class="spinner"></div></div></div>';
+    // Load referral data
+    fetch(API + 'referral_stats?user_id=' + state.dbId).then(r=>r.json()).then(d => {
+      const refLink = d.link || 'https://t.me/mindzip_bot?start=ref_' + state.dbId;
+      document.getElementById('referralContent').innerHTML = `
+        <div class="setting-card"><div class="sl">🔗 Твоя ссылка</div><div class="sv" style="font-size:12px;word-break:break-all">${refLink}</div></div>
+        <div class="setting-card"><div class="sl">📊 Приглашено</div><div class="sv">${d.count || 0} друзей</div></div>
+        <button class="send-btn" onclick="copyText('${refLink}')">📋 Скопировать ссылку</button>
+      `;
+    }).catch(() => {
+      document.getElementById('referralContent').innerHTML = '<div class="setting-card">Ошибка загрузки</div>';
+    });
+  } else if (tab === 'support') {
+    html += `
+      <div style="padding:4px 0">📬 <b>Связь с разработчиком</b></div>
+      <div class="support-form" style="padding:0;margin-top:8px">
+        <textarea id="feedbackText" placeholder="Опишите проблему или предложение..." style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;outline:none;min-height:100px"></textarea>
+        <button class="send-btn" onclick="sendFeedback()" style="width:100%;padding:12px;margin-top:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">📤 Отправить</button>
+      </div>
+    `;
+  }
+  
+  document.getElementById('settingsContent').innerHTML = html;
 }
 
 // === SEARCH ===
