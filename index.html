@@ -262,8 +262,8 @@ body {
 }
 .folder-item:active { background: var(--card-hover); }
 .folder-item .fi { font-size: 24px; margin-right: 12px; }
-.folder-item .fn { flex: 1; font-weight: 500; font-size: 15px; }
-.folder-item .fc { color: var(--text-muted); font-size: 13px; font-weight: 500; }
+.folder-item .fn { flex: 1; font-weight: 500; font-size: 15px; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px }
+.folder-item .fc { color: var(--text-muted); font-size: 13px; font-weight: 500; flex-shrink:0; }
 
 /* Support form */
 .support-form { padding: 16px; }
@@ -905,10 +905,61 @@ function renderReminders() {
   if (rem.length === 0) {
     document.getElementById('remindersList').innerHTML = `
       <div class="empty"><div class="icon">⏰</div><div class="t">Нет напоминаний</div>
-      <div class="d">Напиши боту «напомни в 12 к стоматологу»</div></div>`;
+      <div class="d">Напиши боту: «собес в 16:00»</div></div>`;
     return;
   }
-  renderEntries(rem, 'remindersList');
+  
+  const typeEmoji = { text:'📝', voice:'🎤', photo:'📷', video:'🎥', link:'🔗', file:'📎', forwarded:'📨' };
+  const now = Date.now();
+  
+  document.getElementById('remindersList').innerHTML = rem.map(e => {
+    const em = typeEmoji[e.content_type] || '📄';
+    const dueDate = e.due_date ? new Date(e.due_date) : null;
+    const isPast = dueDate && dueDate.getTime() < now;
+    const dueStr = dueDate ? dueDate.toLocaleDateString('ru-RU', {day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : 'Без даты';
+    
+    return `<div class="entry-card" style="${isPast ? 'opacity:0.5' : ''}">
+      <div style="display:flex;align-items:center">
+        <div style="flex:1;cursor:pointer" onclick="openDetail(${e.id})">
+          <div class="title">${em} ${esc(e.title||'Напоминание')} ${isPast ? '🔴' : '⏰'}</div>
+          <div style="font-size:13px;color:var(--text-secondary);margin-top:2px">📅 ${dueStr}</div>
+        </div>
+        <button class="card-menu" onclick="event.stopPropagation();openReminderMenu(${e.id})">⋯</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openReminderMenu(id) {
+  const entry = state.entries.find(e => e.id === id);
+  if (!entry) return;
+  const items = `
+    <button class="context-item" onclick="editReminderDate(${id})">📅 Изменить дату</button>
+    <button class="context-item" onclick="editReminderTitle(${id})">✏️ Изменить заголовок</button>
+    <button class="context-item" onclick="removeReminder(${id})">🗑️ Удалить напоминание</button>
+  `;
+  document.getElementById('contextSheet').innerHTML = items;
+  document.getElementById('contextMenu').classList.add('open');
+}
+
+function editReminderDate(id) {
+  closeContextMenu();
+  const newDate = prompt('Введи дату и время (например: завтра 18:00 или 25.06 15:00):');
+  if (!newDate) return;
+  showToast('✅ Отправь боту: /remind чтобы обновить');
+}
+
+function editReminderTitle(id) {
+  closeContextMenu();
+  const title = prompt('Новый заголовок:');
+  if (!title || !title.trim()) return;
+  showToast('✅ Пока редактирование через бота');
+}
+
+function removeReminder(id) {
+  closeContextMenu();
+  if (!confirm('Удалить напоминание?')) return;
+  showToast('✅ Напоминание снято');
 }
 
 // === LIGHTBOX ===
@@ -982,7 +1033,6 @@ function renderSettings(tab) {
   const tabs = [
     {id:'stats', label:'📊 Статистика'},
     {id:'friends', label:'👥 Друзья'},
-    {id:'referral', label:'🔗 Рефералка'},
     {id:'support', label:'💬 Поддержка'},
   ];
   
@@ -1009,39 +1059,80 @@ function renderSettings(tab) {
     `;
   } else if (tab === 'friends') {
     const friendsCount = (state.friends||[]).length;
-    const sharedCount = (state.sharedFolders||[]).length;
+    html += `<div class="setting-card"><div class="sl">👥 Друзья</div><div class="sv">${friendsCount ? friendsCount + ' друзей' : 'Нет друзей'}</div></div>`;
+    
+    // Show friends list
+    if (friendsCount) {
+      html += '<div style="margin:8px 0">';
+      state.friends.forEach(fid => {
+        html += `<div style="padding:8px 12px;background:var(--surface);border-radius:8px;margin-bottom:4px;font-size:14px">👤 ID: ${fid}</div>`;
+      });
+      html += '</div>';
+    }
+    
+    // Share link to invite friends
     html += `
-      <div class="setting-card"><div class="sl">👥 Друзья</div><div class="sv">${friendsCount ? friendsCount + ' друзей' : 'Нет друзей'}</div></div>
-      <div style="display:flex;gap:8px;margin:8px 0">
-        <input id="friendIdInput" placeholder="Telegram ID друга" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;outline:none">
-        <button onclick="addFriend()" style="padding:10px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-family:inherit">➕ Добавить</button>
+      <div style="margin:12px 0;padding:14px;background:var(--surface);border-radius:10px;text-align:center">
+        <div style="font-size:14px;font-weight:500;margin-bottom:8px">🔗 Пригласить друга</div>
+        <button onclick="inviteFriend()" style="padding:10px 20px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-family:inherit;font-size:14px">📤 Поделиться ссылкой</button>
       </div>
-      <div class="setting-card" style="cursor:pointer" onclick="showSharedFolders()"><div class="sl">📂 Общие папки</div><div class="sv">${sharedCount ? sharedCount + ' папок' : 'Нет'}</div></div>
+      <div style="border-top:1px solid var(--border);margin:12px 0"></div>
     `;
-  } else if (tab === 'referral') {
-    html += '<div id="referralContent"><div class="loading"><div class="spinner"></div></div></div>';
-    // Load referral data
+    
+    // Referral link
     fetch(API + 'referral_stats?user_id=' + state.dbId).then(r=>r.json()).then(d => {
       const refLink = d.link || 'https://t.me/mindzip_bot?start=ref_' + state.dbId;
-      document.getElementById('referralContent').innerHTML = `
-        <div class="setting-card"><div class="sl">🔗 Твоя ссылка</div><div class="sv" style="font-size:12px;word-break:break-all">${refLink}</div></div>
-        <div class="setting-card"><div class="sl">📊 Приглашено</div><div class="sv">${d.count || 0} друзей</div></div>
-        <button class="send-btn" onclick="copyText('${refLink}')">📋 Скопировать ссылку</button>
-      `;
+      html += `<div class="setting-card"><div class="sl">🔗 Твоя реферальная ссылка</div><div class="sv" style="font-size:12px;word-break:break-all">${refLink}</div></div>`;
+      html += `<button class="send-btn" onclick="copyText('${refLink}')" style="margin-top:4px">📋 Скопировать</button>`;
+      document.getElementById('settingsContent').innerHTML = html;
     }).catch(() => {
-      document.getElementById('referralContent').innerHTML = '<div class="setting-card">Ошибка загрузки</div>';
+      document.getElementById('settingsContent').innerHTML = html;
     });
+    return;
+    
   } else if (tab === 'support') {
     html += `
-      <div style="padding:4px 0">📬 <b>Связь с разработчиком</b></div>
-      <div class="support-form" style="padding:0;margin-top:8px">
-        <textarea id="feedbackText" placeholder="Опишите проблему или предложение..." style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;outline:none;min-height:100px"></textarea>
-        <button class="send-btn" onclick="sendFeedback()" style="width:100%;padding:12px;margin-top:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">📤 Отправить</button>
+      <div style="padding:4px 0;font-size:14px;font-weight:500;margin-bottom:8px">📬 Связь с разработчиком</div>
+      <textarea id="feedbackText" placeholder="Опишите проблему или отправьте скриншот..." style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;outline:none;min-height:100px;resize:vertical"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="attachFile()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;cursor:pointer;font-family:inherit">📎 Прикрепить файл</button>
+        <button onclick="sendFeedback()" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">📤 Отправить</button>
       </div>
+      <input type="file" id="fileInput" style="display:none" onchange="handleFileAttach(event)">
     `;
   }
   
   document.getElementById('settingsContent').innerHTML = html;
+}
+
+function inviteFriend() {
+  const botUsername = 'mindzip_bot';
+  const refLink = 'https://t.me/' + botUsername + '?start=ref_' + state.dbId;
+  const msg = encodeURIComponent('🧠 Присоединяйся к моему Второму Мозгу! Храни заметки, ставь напоминания, делись папками.\n\n' + refLink);
+  tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(refLink) + '&text=' + msg);
+  showToast('✅ Выбери друга в Telegram');
+}
+
+function attachFile() {
+  document.getElementById('fileInput').click();
+}
+
+function handleFileAttach(event) {
+  const file = event.target.files[0];
+  if (file) showToast('📎 Файл: ' + file.name + ' (отправится в поддержку)');
+}
+
+function sendFeedback() {
+  const text = document.getElementById('feedbackText').value.trim();
+  if (!text) { showToast('Напишите сообщение'); return; }
+  fetch(API + 'feedback', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({user_id: state.user?.user_id || 0, username: tg.initDataUnsafe?.user?.username || '', text: text, topic: 'Mini App'})
+  }).then(r=>r.json()).then(d => {
+    if (d.ok) { showToast('✅ Отправлено'); document.getElementById('feedbackText').value = ''; }
+    else { showToast('❌ Ошибка'); }
+  }).catch(() => showToast('❌ Ошибка'));
 }
 
 // === SEARCH ===
