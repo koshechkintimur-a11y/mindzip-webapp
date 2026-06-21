@@ -582,7 +582,9 @@ async function auth() {
   
   if (initData) {
     try {
-      const resp = await fetch(API + 'auth?init_data=' + encodeURIComponent(initData));
+      const resp = await fetch(API + 'auth?init_data=' + encodeURIComponent(initData), {
+        method: 'GET'
+      });
       const data = await resp.json();
       if (data.registered) {
         state.user = data;
