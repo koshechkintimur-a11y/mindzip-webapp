@@ -773,8 +773,9 @@ function showCreateSharedFolder() {
   
   // Показываем выбор друга
   let items = '<div style="padding:8px 16px;font-size:13px;color:var(--text-muted)">Выбери друга для общей папки:</div>';
-  friends.forEach(fid => {
-    items += `<button class="context-item" onclick="createSharedFolderWith('${esc(name.trim())}',${fid})">👤 ID: ${fid}</button>`;
+  friends.forEach(f => {
+    const fname = f.first_name || f.username || ('ID: ' + f.id);
+    items += `<button class="context-item" onclick="createSharedFolderWith('${esc(name.trim())}',${f.id})">👤 ${esc(fname)}</button>`;
   });
   items += `<button class="context-item danger" onclick="closeContextMenu()">❌ Отмена</button>`;
   document.getElementById('contextSheet').innerHTML = items;
@@ -916,8 +917,9 @@ function shareFolderPrompt(folderId) {
     return;
   }
   let items = '<div style="padding:8px 16px;font-size:13px;color:var(--text-muted)">Выбери друга:</div>';
-  friends.forEach(fid => {
-    items += `<button class="context-item" onclick="shareFolderTo(${folderId},${fid})">👤 ID: ${fid}</button>`;
+  friends.forEach(f => {
+    const fname = f.first_name || f.username || ('ID: ' + f.id);
+    items += `<button class="context-item" onclick="shareFolderTo(${folderId},${f.id})">👤 ${esc(fname)}</button>`;
   });
   items += `<button class="context-item danger" onclick="closeContextMenu()">❌ Отмена</button>`;
   document.getElementById('contextSheet').innerHTML = items;
@@ -1203,10 +1205,12 @@ function renderSettings(tab) {
     // Show friends list
     if (friendsCount) {
       html += '<div style="margin:8px 0">';
-      state.friends.forEach(fid => {
-        html += `<div style="padding:8px 12px;background:var(--surface);border-radius:8px;margin-bottom:4px;font-size:14px">👤 ID: ${fid}</div>`;
+      state.friends.forEach(f => {
+        const name = f.first_name || f.username || ('ID: ' + f.id);
+        html += `<div style="padding:8px 12px;background:var(--surface);border-radius:8px;margin-bottom:4px;font-size:14px">👤 ${esc(name)} ${f.username ? '@' + esc(f.username) : ''}</div>`;
       });
       html += '</div>';
+    }
     }
     
     // Share link to invite friends
@@ -1438,8 +1442,9 @@ function showDetailShareMenu(entryId) {
     return;
   }
   let items = '<div style="padding:8px 16px;font-size:13px;color:var(--text-muted)">Поделиться записью с другом:</div>';
-  friends.forEach(fid => {
-    items += `<button class="context-item" onclick="shareEntryWithFriend(${entryId},${fid})">👤 ID: ${fid}</button>`;
+  friends.forEach(f => {
+    const fname = f.first_name || f.username || ('ID: ' + f.id);
+    items += `<button class="context-item" onclick="shareEntryWithFriend(${entryId},${f.id})">👤 ${esc(fname)}</button>`;
   });
   items += `<button class="context-item danger" onclick="closeContextMenu()">❌ Отмена</button>`;
   document.getElementById('contextSheet').innerHTML = items;
@@ -1516,20 +1521,28 @@ async function saveReminderDate(entryId) {
   if (!dateVal || !timeVal) { showToast('❌ Выбери дату и время'); return; }
   
   const dt = new Date(dateVal + 'T' + timeVal);
+  const dueISO = dt.toISOString().replace('T', ' ').slice(0, 19);
   closeContextMenu();
   
   try {
-    const r = await fetch(API + 'feedback', {
+    const r = await fetch(API + 'entries/reminder', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        user_id: state.user?.user_id || 0,
-        username: tg.initDataUnsafe?.user?.username || '',
-        text: `⏰ Изменить напоминание записи #${entryId} на ${dt.toLocaleString('ru-RU')}`,
-        topic: 'reminder_update'
+        user_id: state.dbId,
+        entry_id: entryId,
+        action: 'set',
+        due_date: dueISO
       })
     });
-    showToast('✅ Отправлен запрос на изменение');
+    const d = await r.json();
+    if (d.ok) {
+      showToast('✅ Дата напоминания обновлена');
+      // Reload to refresh
+      setTimeout(() => loadData(), 500);
+    } else {
+      showToast('❌ Ошибка');
+    }
   } catch(e) {
     showToast('❌ Ошибка');
   }
@@ -1538,17 +1551,24 @@ async function saveReminderDate(entryId) {
 async function removeReminderDate(entryId) {
   closeContextMenu();
   try {
-    const r = await fetch(API + 'feedback', {
+    const r = await fetch(API + 'entries/reminder', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        user_id: state.user?.user_id || 0,
-        username: tg.initDataUnsafe?.user?.username || '',
-        text: `❌ Удалить напоминание записи #${entryId}`,
-        topic: 'reminder_delete'
+        user_id: state.dbId,
+        entry_id: entryId,
+        action: 'delete'
       })
     });
-    showToast('✅ Напоминание будет удалено');
+    const d = await r.json();
+    if (d.ok) {
+      showToast('✅ Напоминание удалено');
+      state.entries = state.entries.map(e => e.id === entryId ? {...e, is_task: false, due_date: null} : e);
+      if (document.querySelector('.page.active')?.id === 'pageReminders') renderReminders();
+      else if (document.querySelector('.page.active')?.id === 'pageHome') renderHome();
+    } else {
+      showToast('❌ Ошибка');
+    }
   } catch(e) {
     showToast('❌ Ошибка');
   }
