@@ -468,6 +468,12 @@ body {
     <input type="text" id="searchInput" placeholder="Поиск по смыслу..." oninput="onSearch()">
   </div>
   <div class="stats-row" id="statsRow"></div>
+  <div style="display:flex;gap:4px;padding:0 16px 10px;overflow-x:auto" id="filterTabs">
+    <div onclick="setFilter('all')" style="flex-shrink:0;padding:6px 14px;border-radius:8px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">📋 Всё</div>
+    <div onclick="setFilter('notes')" style="flex-shrink:0;padding:6px 14px;border-radius:8px;background:var(--surface);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer">📝 Заметки</div>
+    <div onclick="setFilter('tasks')" style="flex-shrink:0;padding:6px 14px;border-radius:8px;background:var(--surface);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer">⏰ Встречи</div>
+    <div onclick="setFilter('media')" style="flex-shrink:0;padding:6px 14px;border-radius:8px;background:var(--surface);color:var(--text-secondary);font-size:12px;font-weight:500;cursor:pointer">📎 Файлы</div>
+  </div>
   <div class="entries" id="entriesList"></div>
 </div>
 
@@ -662,7 +668,6 @@ async function loadData() {
 
 // === RENDER: Home ===
 function renderHome() {
-  // Stats
   const s = state.stats;
   if (s) {
     document.getElementById('statsRow').innerHTML = `
@@ -671,8 +676,8 @@ function renderHome() {
       <div class="stat-pill clickable" onclick="filterByType('week')"><span class="val">${s.this_week}</span> За неделю</div>
     `;
   }
-  
-  renderEntries(state.entries, 'entriesList');
+  // Apply current filter
+  setFilter(currentFilter);
 }
 
 function renderEntries(arr, containerId) {
@@ -1017,22 +1022,20 @@ function openReminderMenu(id) {
 
 function editReminderDate(id) {
   closeContextMenu();
-  const newDate = prompt('Введи дату и время (например: завтра 18:00 или 25.06 15:00):');
-  if (!newDate) return;
-  showToast('✅ Отправь боту: /remind чтобы обновить');
+  showDatePicker(id);
 }
 
 function editReminderTitle(id) {
   closeContextMenu();
   const title = prompt('Новый заголовок:');
   if (!title || !title.trim()) return;
-  showToast('✅ Пока редактирование через бота');
+  showToast('✅ Пока через бота');
 }
 
 function removeReminder(id) {
   closeContextMenu();
   if (!confirm('Удалить напоминание?')) return;
-  showToast('✅ Напоминание снято');
+  removeReminderDate(id);
 }
 
 // === LIGHTBOX ===
@@ -1081,7 +1084,35 @@ function showSharedFolders() {
     '<div class="setting-card" style="white-space:pre-wrap">' + text + '</div>';
 }
 
-// === TYPE LABEL ===
+// === HOME FILTER TABS ===
+let currentFilter = 'all';
+
+function setFilter(filter) {
+  currentFilter = filter;
+  // Update tab styles
+  const tabs = document.getElementById('filterTabs');
+  if (tabs) {
+    const children = tabs.children;
+    const labels = ['all','notes','tasks','media'];
+    const tabLabels = ['📋 Всё','📝 Заметки','⏰ Встречи','📎 Файлы'];
+    for (let i = 0; i < children.length; i++) {
+      const isActive = labels[i] === filter;
+      children[i].style.background = isActive ? 'var(--accent)' : 'var(--surface)';
+      children[i].style.color = isActive ? '#fff' : 'var(--text-secondary)';
+      children[i].style.fontWeight = isActive ? '600' : '500';
+    }
+  }
+  
+  let filtered = [...state.entries];
+  if (filter === 'notes') {
+    filtered = filtered.filter(e => e.content_type === 'text' && !e.is_task);
+  } else if (filter === 'tasks') {
+    filtered = filtered.filter(e => e.is_task);
+  } else if (filter === 'media') {
+    filtered = filtered.filter(e => ['photo','video','voice','file','audio'].includes(e.content_type));
+  }
+  renderEntries(filtered, 'entriesList');
+}
 function typeLabel(type) {
   const labels = {
     text: 'Текст', voice: 'Голосовые', photo: 'Фото',
@@ -1355,9 +1386,16 @@ function openDetail(id) {
     const gcalLink = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(entry.title||'Напоминание') + '&dates=' + entry.due_date.replace(/[^0-9T]/g,'').slice(0,15) + '/' + entry.due_date.replace(/[^0-9T]/g,'').slice(0,15);
     calButton = `<button onclick="window.open('${gcalLink}','_blank')">📅 Google</button> `;
     calButton += `<button onclick="downloadICS(${entry.id})">📅 .ics</button> `;
+    calButton += `<button onclick="showDatePicker(${entry.id})">✏️ Изменить дату</button> `;
+  } else if (entry.due_date) {
+    calButton = `<button onclick="showDatePicker(${entry.id})">✏️ Изменить дату</button> `;
   }
   
   actions += `<button onclick="copyText('${esc(entry.content_text||'')}')">📋 Копировать</button>`;
+  // Folder + Share + Delete
+  actions += `<button onclick="showMoveFolderMenu(${entry.id})">📂 Папка</button> `;
+  actions += `<button onclick="showDetailShareMenu(${entry.id})">🔗 Поделиться</button> `;
+  actions += `<button class="danger" onclick="deleteEntryFromDetail(${entry.id})">🗑️ Удалить</button>`;
   actions = calButton + actions;
   
   document.getElementById('detailBody').innerHTML = `
@@ -1381,6 +1419,158 @@ function closeDetail() {
 
 function copyText(t) {
   navigator.clipboard.writeText(t).then(() => showToast('✅ Скопировано')).catch(() => showToast('Ошибка копирования'));
+}
+
+// === DETAIL ACTIONS ===
+function showMoveFolderMenu(entryId) {
+  closeDetail();
+  // Open context menu with folders
+  const entry = state.entries.find(e => e.id === entryId) || state.folderEntries.find(e => e.id === entryId);
+  state.currentEntry = entry;
+  openContextMenu(entryId);
+}
+
+function showDetailShareMenu(entryId) {
+  closeContextMenu();
+  const friends = state.friends || [];
+  if (!friends.length) {
+    showToast('❌ Сначала добавь друзей');
+    return;
+  }
+  let items = '<div style="padding:8px 16px;font-size:13px;color:var(--text-muted)">Поделиться записью с другом:</div>';
+  friends.forEach(fid => {
+    items += `<button class="context-item" onclick="shareEntryWithFriend(${entryId},${fid})">👤 ID: ${fid}</button>`;
+  });
+  items += `<button class="context-item danger" onclick="closeContextMenu()">❌ Отмена</button>`;
+  document.getElementById('contextSheet').innerHTML = items;
+  document.getElementById('contextMenu').classList.add('open');
+}
+
+async function shareEntryWithFriend(entryId, friendId) {
+  closeContextMenu();
+  try {
+    const r = await fetch(API + 'feedback', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({user_id: state.dbId, text: `🔗 Пользователь ${state.dbId} поделился записью #${entryId}`, topic: 'share'})
+    });
+    showToast('✅ Отправлено другу (через бота)');
+  } catch(e) {
+    showToast('❌ Ошибка');
+  }
+}
+
+async function deleteEntryFromDetail(id) {
+  if (!confirm('🗑️ Удалить запись навсегда?')) return;
+  closeDetail();
+  try {
+    const r = await fetch(API + 'entries/delete', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({user_id: state.dbId, entry_id: id})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      state.entries = state.entries.filter(e => e.id !== id);
+      showToast('✅ Запись удалена');
+      if (document.querySelector('.page.active')?.id === 'pageHome') renderHome();
+    } else {
+      showToast('❌ Ошибка удаления');
+    }
+  } catch(e) {
+    showToast('❌ Ошибка удаления');
+  }
+}
+
+// === DATE PICKER FOR REMINDERS ===
+function showDatePicker(entryId) {
+  const entry = state.entries.find(e => e.id === entryId) || state.folderEntries.find(e => e.id === entryId);
+  if (!entry) return;
+  
+  const dueDate = entry.due_date ? new Date(entry.due_date) : new Date();
+  const dateStr = dueDate.toISOString().split('T')[0];
+  const timeStr = dueDate.toTimeString().slice(0,5);
+  
+  closeContextMenu();
+  const items = `
+    <div style="padding:12px 16px">
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px">📅 Изменить дату напоминания</div>
+      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Дата:</label>
+      <input type="date" id="reminderDateInput" value="${dateStr}" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;margin-bottom:12px">
+      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Время:</label>
+      <input type="time" id="reminderTimeInput" value="${timeStr}" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;margin-bottom:12px">
+      <div style="display:flex;gap:8px">
+        <button onclick="saveReminderDate(${entryId})" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">✅ Сохранить</button>
+        <button onclick="removeReminderDate(${entryId})" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--red);background:transparent;color:var(--red);font-size:14px;cursor:pointer;font-family:inherit">🗑️ Удалить</button>
+      </div>
+      <button onclick="closeContextMenu()" style="width:100%;padding:8px;margin-top:8px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;font-family:inherit">❌ Отмена</button>
+    </div>
+  `;
+  document.getElementById('contextSheet').innerHTML = items;
+  document.getElementById('contextMenu').classList.add('open');
+}
+
+async function saveReminderDate(entryId) {
+  const dateVal = document.getElementById('reminderDateInput').value;
+  const timeVal = document.getElementById('reminderTimeInput').value;
+  if (!dateVal || !timeVal) { showToast('❌ Выбери дату и время'); return; }
+  
+  const dt = new Date(dateVal + 'T' + timeVal);
+  closeContextMenu();
+  
+  try {
+    const r = await fetch(API + 'feedback', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        user_id: state.user?.user_id || 0,
+        username: tg.initDataUnsafe?.user?.username || '',
+        text: `⏰ Изменить напоминание записи #${entryId} на ${dt.toLocaleString('ru-RU')}`,
+        topic: 'reminder_update'
+      })
+    });
+    showToast('✅ Отправлен запрос на изменение');
+  } catch(e) {
+    showToast('❌ Ошибка');
+  }
+}
+
+async function removeReminderDate(entryId) {
+  closeContextMenu();
+  try {
+    const r = await fetch(API + 'feedback', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        user_id: state.user?.user_id || 0,
+        username: tg.initDataUnsafe?.user?.username || '',
+        text: `❌ Удалить напоминание записи #${entryId}`,
+        topic: 'reminder_delete'
+      })
+    });
+    showToast('✅ Напоминание будет удалено');
+  } catch(e) {
+    showToast('❌ Ошибка');
+  }
+}
+
+// === REMINDER CONTEXT MENU FIX ===
+function openReminderMenu(id) {
+  const entry = state.entries.find(e => e.id === id);
+  if (!entry) return;
+  const items = `
+    <button class="context-item" onclick="showDatePicker(${id})">📅 Изменить дату</button>
+    <button class="context-item" onclick="showToast('Редактируй в карточке')">✏️ Изменить заголовок</button>
+    <button class="context-item danger" onclick="removeReminderConfirm(${id})">🗑️ Удалить напоминание</button>
+  `;
+  document.getElementById('contextSheet').innerHTML = items;
+  document.getElementById('contextMenu').classList.add('open');
+}
+
+function removeReminderConfirm(id) {
+  if (!confirm('Удалить напоминание?')) return;
+  closeContextMenu();
+  removeReminderDate(id);
 }
 
 // === FEEDBACK ===
