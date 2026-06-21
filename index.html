@@ -262,8 +262,8 @@ body {
 }
 .folder-item:active { background: var(--card-hover); }
 .folder-item .fi { font-size: 24px; margin-right: 12px; }
-.folder-item .fn { flex: 1; font-weight: 500; font-size: 15px; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px }
-.folder-item .fc { color: var(--text-muted); font-size: 13px; font-weight: 500; flex-shrink:0; }
+.folder-item .fn { flex: 1; font-weight: 500; font-size: 15px; overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:36px }
+.folder-item .fc { color: var(--text-muted); font-size: 13px; font-weight: 500; flex-shrink:0; position:absolute;right:44px;top:50%;transform:translateY(-50%); }
 
 /* Support form */
 .support-form { padding: 16px; }
@@ -497,15 +497,10 @@ body {
   <div class="entries" id="remindersList"></div>
 </div>
 
-<!-- Page: Settings -->
-<div class="page" id="pageSettings">
-  <div class="settings-page" id="settingsContent"></div>
-  <div class="support-form">
-    <h3 style="font-size:16px;font-weight:600;margin-bottom:12px">💬 Поддержка / Идеи</h3>
-    <textarea id="feedbackText" placeholder="Опишите проблему или предложение..."></textarea>
-    <button class="send-btn" onclick="sendFeedback()">Отправить</button>
+  <!-- Page: Settings -->
+  <div class="page" id="pageSettings">
+    <div class="settings-page" id="settingsContent"></div>
   </div>
-</div>
 
 <!-- Detail overlay -->
 <div class="detail" id="detailOverlay">
@@ -735,14 +730,17 @@ function renderFolders() {
         <div style="flex:1;display:flex;align-items:center" onclick="openFolder(${f.id})">
           <span class="fi">${f.icon}</span>
           <span class="fn">${esc(f.name)}</span>
-          <span class="fc">${f.count} зап.</span>
+          <span class="fc">${f.count || 0} зап.</span>
         </div>
-        <button class="card-menu" onclick="event.stopPropagation();openFolderMenu(${f.id},'${esc(f.name)}')">⋯</button>
+        <button class="card-menu" onclick="event.stopPropagation();openFolderMenu(${f.id},'${esc(f.name).replace(/'/g,"\\'")}')">⋯</button>
       </div>`
     ).join('');
   } else {
+    // Вкладка "Общие" — тоже показываем кнопку создания общей папки
+    html += '<button onclick="showCreateSharedFolder()" style="width:100%;padding:10px;margin-bottom:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">➕ Создать общую папку</button>';
+    
     if (!state.sharedFolders || !state.sharedFolders.length) {
-      html += '<div class="empty"><div class="icon">🔗</div><div class="t">Нет общих папок</div></div>';
+      html += '<div class="empty"><div class="icon">🔗</div><div class="t">Нет общих папок</div><div class="d">Создай общую папку, чтобы делиться записями с друзьями</div></div>';
       el.innerHTML = html;
       return;
     }
@@ -756,6 +754,51 @@ function renderFolders() {
   }
   
   el.innerHTML = html;
+}
+
+function showCreateSharedFolder() {
+  const name = prompt('📂 Название общей папки:');
+  if (!name || !name.trim()) return;
+  
+  const friends = state.friends || [];
+  if (!friends.length) {
+    showToast('❌ Сначала добавь друзей в настройках');
+    return;
+  }
+  
+  // Показываем выбор друга
+  let items = '<div style="padding:8px 16px;font-size:13px;color:var(--text-muted)">Выбери друга для общей папки:</div>';
+  friends.forEach(fid => {
+    items += `<button class="context-item" onclick="createSharedFolderWith('${esc(name.trim())}',${fid})">👤 ID: ${fid}</button>`;
+  });
+  items += `<button class="context-item danger" onclick="closeContextMenu()">❌ Отмена</button>`;
+  document.getElementById('contextSheet').innerHTML = items;
+  document.getElementById('contextMenu').classList.add('open');
+}
+
+function createSharedFolderWith(name, friendId) {
+  closeContextMenu();
+  // Сначала создаём папку, потом делимся с другом
+  fetch(API + 'create_folder', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({user_id: state.dbId, name: name})
+  }).then(r => r.json()).then(d => {
+    if (d.ok || d.folder_id) {
+      const folderId = d.folder_id;
+      // Шерим с другом
+      fetch(API + 'folder/share', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({user_id: state.dbId, folder_id: folderId, friend_id: friendId})
+      }).then(r => r.json()).then(d2 => {
+        if (d2.ok) { showToast('✅ Папка «' + name + '» создана и открыта другу!'); loadData(); }
+        else { showToast('✅ Папка создана, но ошибка шеринга'); loadData(); }
+      }).catch(() => { showToast('✅ Папка создана'); loadData(); });
+    } else {
+      showToast('❌ Ошибка создания');
+    }
+  }).catch(() => showToast('❌ Ошибка'));
 }
 
 function showCreateFolder() {
@@ -1008,17 +1051,31 @@ function showSharedFolders() {
     '<div class="setting-card" style="white-space:pre-wrap">' + text + '</div>';
 }
 
+// === TYPE LABEL ===
+function typeLabel(type) {
+  const labels = {
+    text: 'Текст', voice: 'Голосовые', photo: 'Фото',
+    video: 'Видео', link: 'Ссылки', file: 'Файлы',
+    forwarded: 'Пересланное', document: 'Документы',
+    all: 'Все записи', favorites: 'Избранное', week: 'За неделю'
+  };
+  return labels[type] || type;
+}
+
 // === FILTER BY TYPE ===
 async function filterByType(type) {
   let filtered = [...state.entries];
-  if (type === 'favorites') filtered = filtered.filter(e => e.is_favorite);
-  if (type === 'week') {
+  if (type === 'favorites') {
+    filtered = filtered.filter(e => e.is_favorite);
+  } else if (type === 'week') {
     const weekAgo = new Date(Date.now() - 7*24*60*60*1000);
     filtered = filtered.filter(e => new Date(e.created_at) > weekAgo);
+  } else if (type !== 'all') {
+    // Фильтр по конкретному типу контента
+    filtered = filtered.filter(e => e.content_type === type);
   }
   renderEntries(filtered, 'entriesList');
-  document.getElementById('headerTitle').textContent = type === 'all' ? 'Второй Мозг' : 
-    ({favorites:'⭐ Избранное', week:'📅 За неделю'})[type] || 'Второй Мозг';
+  document.getElementById('headerTitle').textContent = type === 'all' ? 'Второй Мозг' : '📁 ' + typeLabel(type);
 }
 
 // === RENDER: Settings ===
@@ -1033,7 +1090,6 @@ function renderSettings(tab) {
   const tabs = [
     {id:'stats', label:'📊 Статистика'},
     {id:'friends', label:'👥 Друзья'},
-    {id:'support', label:'💬 Поддержка'},
   ];
   
   let html = '<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto">';
@@ -1047,7 +1103,7 @@ function renderSettings(tab) {
   if (tab === 'stats') {
     const typeEmoji = { text:'📝', voice:'🎤', photo:'📷', video:'🎥', link:'🔗', file:'📎', forwarded:'📨' };
     const types = Object.entries(s.by_type || {}).map(([t,c]) =>
-      `<div class="setting-card" style="cursor:pointer" onclick="filterByType('${t}');switchTab('home')"><div class="sl">${typeEmoji[t]||'📄'} ${t}</div><div class="sv">${c} зап.</div></div>`
+      `<div class="setting-card" style="cursor:pointer" onclick="filterByType('${t}');switchTab('home')"><div class="sl">${typeEmoji[t]||'📄'} ${typeLabel(t)}</div><div class="sv">${c} зап.</div></div>`
     ).join('');
     
     html += `
@@ -1108,32 +1164,20 @@ function renderSettings(tab) {
 function inviteFriend() {
   const botUsername = 'mindzip_bot';
   const refLink = 'https://t.me/' + botUsername + '?start=ref_' + state.dbId;
-  const msg = encodeURIComponent('🧠 Присоединяйся к моему Второму Мозгу! Храни заметки, ставь напоминания, делись папками.\n\n' + refLink);
+  const msg = encodeURIComponent(
+    '🧠 Привет! Я пользуюсь «Вторым Мозгом» — это мой личный бот для заметок, идей и напоминаний.\n\n' +
+    '📝 Сохраняю всё: текст, фото, голосовые, ссылки\n' +
+    '🔍 Ищу по смыслу — просто пишу вопрос\n' +
+    '⏰ Ставлю напоминания, и бот сам напоминает\n' +
+    '📂 Делюсь папками с друзьями\n\n' +
+    'Попробуй, тебе понравится! 🚀\n\n' +
+    refLink
+  );
   tg.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(refLink) + '&text=' + msg);
   showToast('✅ Выбери друга в Telegram');
 }
 
-function attachFile() {
-  document.getElementById('fileInput').click();
-}
-
-function handleFileAttach(event) {
-  const file = event.target.files[0];
-  if (file) showToast('📎 Файл: ' + file.name + ' (отправится в поддержку)');
-}
-
-function sendFeedback() {
-  const text = document.getElementById('feedbackText').value.trim();
-  if (!text) { showToast('Напишите сообщение'); return; }
-  fetch(API + 'feedback', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({user_id: state.user?.user_id || 0, username: tg.initDataUnsafe?.user?.username || '', text: text, topic: 'Mini App'})
-  }).then(r=>r.json()).then(d => {
-    if (d.ok) { showToast('✅ Отправлено'); document.getElementById('feedbackText').value = ''; }
-    else { showToast('❌ Ошибка'); }
-  }).catch(() => showToast('❌ Ошибка'));
-}
+// Feedback moved to bot — напишите боту @mindzip_support_bot
 
 // === SEARCH ===
 let searchTimer;
@@ -1181,26 +1225,45 @@ function openDetail(id) {
   let actions = '';
   if (entry.source_url) actions += `<a href="${entry.source_url}" target="_blank"><button class="primary">🔗 Открыть ссылку</button></a> `;
   
-  // File preview
+  // File preview — inline просмотр
   let filePreview = '';
+  const fileUrl = API + 'file/' + entry.id + '?user_id=' + state.dbId;
+  
   if (entry.content_type === 'photo') {
-    const imgUrl = API + 'file/' + entry.id + '?user_id=' + state.dbId;
-    filePreview = `<div class="file-preview" style="flex-direction:column;padding:0;overflow:hidden" onclick="showLightbox('${imgUrl}')">
-      <img src="${imgUrl}" style="width:100%;max-height:300px;object-fit:cover;border-radius:8px" onerror="this.parentElement.innerHTML='<div style=\\'padding:14px\\'><span>📷 Фото</span></div>'">
+    const imgUrl = fileUrl;
+    filePreview = `<div class="file-preview" style="flex-direction:column;padding:0;overflow:hidden;cursor:pointer" onclick="showLightbox('${imgUrl}')">
+      <img src="${imgUrl}" style="width:100%;max-height:300px;object-fit:cover;border-radius:8px" onerror="this.parentElement.innerHTML='<div style=\\'padding:14px;text-align:center\\'><span style=\\'font-size:32px\\'>📷</span><div style=\\'color:var(--text-muted);margin-top:4px\\'>Фото не загрузилось</div></div>'">
     </div>`;
   } else if (entry.content_type === 'file' || entry.content_type === 'document') {
-    const fileUrl = API + 'file/' + entry.id + '?user_id=' + state.dbId;
-    filePreview = `<div class="file-preview">
-      <span class="fp-icon">📎</span>
-      <span class="fp-name">${esc(entry.title||'Файл')}</span>
-      <button class="fp-open" onclick="tg.openLink?.('${fileUrl}')||window.open('${fileUrl}','_blank')">📄 Открыть</button>
-    </div>`;
+    const fileName = (entry.title || 'Файл').toLowerCase();
+    if (fileName.endsWith('.pdf')) {
+      // PDF — inline просмотр через embed
+      filePreview = `<div class="file-preview" style="flex-direction:column;padding:0;overflow:hidden">
+        <embed src="${fileUrl}" type="application/pdf" style="width:100%;height:300px;border:none;border-radius:8px" onerror="this.outerHTML='<div style=\\'padding:14px;text-align:center\\'><span style=\\'font-size:32px\\'>📄</span><div style=\\'color:var(--text-muted);margin-top:4px\\'>PDF не загрузился</div></div>'">
+        <div style="padding:10px 14px;display:flex;align-items:center;gap:10px;border-top:1px solid var(--border)">
+          <span style="font-size:13px;flex:1;color:var(--text-secondary)">📄 ${esc(entry.title||'PDF-файл')}</span>
+          <button class="fp-open" onclick="tg.openLink?.('${fileUrl}')||window.open('${fileUrl}','_blank')">📤 Открыть</button>
+        </div>
+      </div>`;
+    } else {
+      // Другие файлы — кнопка открытия
+      filePreview = `<div class="file-preview">
+        <span class="fp-icon">📎</span>
+        <span class="fp-name">${esc(entry.title||'Файл')}</span>
+        <button class="fp-open" onclick="tg.openLink?.('${fileUrl}')||window.open('${fileUrl}','_blank')">📄 Открыть</button>
+      </div>`;
+    }
   } else if (entry.content_type === 'voice') {
-    const fileUrl = API + 'file/' + entry.id + '?user_id=' + state.dbId;
-    filePreview = `<div class="file-preview">
-      <span class="fp-icon">🎤</span>
-      <span class="fp-name">Голосовое</span>
-      <button class="fp-open" onclick="tg.openLink?.('${fileUrl}')||window.open('${fileUrl}','_blank')">▶</button>
+    // Аудио — inline плеер
+    filePreview = `<div class="file-preview" style="flex-direction:column;padding:10px 14px;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px;width:100%">
+        <span style="font-size:24px">🎤</span>
+        <span style="flex:1;font-size:13px;color:var(--text-secondary)">Голосовое сообщение</span>
+      </div>
+      <audio controls style="width:100%;height:40px" src="${fileUrl}" preload="auto">
+        <source src="${fileUrl}" type="audio/ogg">
+        Твой браузер не поддерживает аудио.
+      </audio>
     </div>`;
   }
   
