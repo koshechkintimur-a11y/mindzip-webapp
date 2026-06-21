@@ -860,14 +860,28 @@ function deleteFolder(id) {
   }).catch(() => showToast('❌ Ошибка'));
 }
 
-function shareFolderPrompt(id) {
+function shareFolderPrompt(folderId) {
   closeContextMenu();
-  const friendId = prompt('Telegram ID друга:');
-  if (!friendId || !/^\\d+$/.test(friendId)) { showToast('❌ Некорректный ID'); return; }
+  const friends = state.friends || [];
+  if (!friends.length) {
+    showToast('❌ Сначала добавь друзей в настройках');
+    return;
+  }
+  let items = '<div style="padding:8px 16px;font-size:13px;color:var(--text-muted)">Выбери друга:</div>';
+  friends.forEach(fid => {
+    items += `<button class="context-item" onclick="shareFolderTo(${folderId},${fid})">👤 ID: ${fid}</button>`;
+  });
+  items += `<button class="context-item danger" onclick="closeContextMenu()">❌ Отмена</button>`;
+  document.getElementById('contextSheet').innerHTML = items;
+  document.getElementById('contextMenu').classList.add('open');
+}
+
+function shareFolderTo(folderId, friendId) {
+  closeContextMenu();
   fetch(API + 'folder/share', {
     method: 'POST',
     headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({user_id: state.dbId, folder_id: id, friend_id: parseInt(friendId)})
+    body: JSON.stringify({user_id: state.dbId, folder_id: folderId, friend_id: friendId})
   }).then(r=>r.json()).then(d => {
     if (d.ok) { showToast('✅ Папка открыта другу!'); }
     else { showToast('❌ Ошибка'); }
