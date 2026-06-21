@@ -429,8 +429,8 @@
   </div>
   
   <script>
-    const API_BASE = 'https://api.telegram.org/bot8902296755:AAHF_xSx9WewwCR4ZpyzmSxihqpiobNBDkw';
-    let tg = window.Telegram.WebApp;
+	    // API-запросы идут через серверный прокси (не напрямую с токеном на фронте)
+	    let tg = window.Telegram.WebApp;
     tg.expand();
     tg.ready();
     
