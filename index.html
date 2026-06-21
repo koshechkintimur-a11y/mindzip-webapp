@@ -1,686 +1,762 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>🧠 Второй Мозг</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    :root {
-      --bg-primary: #08090a;
-      --bg-panel: #0f1011;
-      --bg-surface: #191a1b;
-      --bg-hover: #28282c;
-      --text-primary: #f7f8f8;
-      --text-secondary: #d0d6e0;
-      --text-tertiary: #8a8f98;
-      --text-muted: #62666d;
-      --accent: #5e6ad2;
-      --accent-hover: #828fff;
-      --border: rgba(255,255,255,0.08);
-      --border-subtle: rgba(255,255,255,0.05);
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-      --radius-sm: 6px;
-      --radius-md: 8px;
-      --radius-lg: 12px;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      font-feature-settings: 'cv01', 'ss03';
-    }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      min-height: 100vh;
-      overflow-x: hidden;
-    }
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
-    
-    /* Header */
-    .header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(8,9,10,0.95);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .header-title {
-      font-size: 18px;
-      font-weight: 590;
-      letter-spacing: -0.24px;
-      flex: 1;
-    }
-    .header-emoji { font-size: 22px; }
-    .header-actions {
-      display: flex;
-      gap: 8px;
-    }
-    .icon-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.03);
-      color: var(--text-primary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      transition: all 0.2s;
-    }
-    .icon-btn:active { background: rgba(255,255,255,0.08); }
-    
-    /* Search */
-    .search-bar {
-      margin: 12px 16px;
-      position: relative;
-    }
-    .search-bar input {
-      width: 100%;
-      padding: 12px 16px 12px 44px;
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.02);
-      color: var(--text-primary);
-      font-size: 15px;
-      font-family: inherit;
-      outline: none;
-      transition: border 0.2s;
-    }
-    .search-bar input::placeholder { color: var(--text-tertiary); }
-    .search-bar input:focus { border-color: var(--accent); }
-    .search-icon {
-      position: absolute;
-      left: 14px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--text-muted);
-      font-size: 18px;
-    }
-    
-    /* Quick Stats */
-    .quick-stats {
-      display: flex;
-      gap: 8px;
-      padding: 0 16px;
-      margin-bottom: 16px;
-      overflow-x: auto;
-    }
-    .stat-card {
-      flex-shrink: 0;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 12px 16px;
-      min-width: 100px;
-    }
-    .stat-value {
-      font-size: 22px;
-      font-weight: 510;
-      letter-spacing: -0.3px;
-    }
-    .stat-label {
-      font-size: 12px;
-      font-weight: 510;
-      color: var(--text-muted);
-      margin-top: 2px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    
-    /* Tabs */
-    .tabs {
-      display: flex;
-      gap: 4px;
-      padding: 0 16px;
-      margin-bottom: 12px;
-      background: var(--bg-panel);
-      border-radius: var(--radius-md);
-      margin-left: 16px;
-      margin-right: 16px;
-      padding: 3px;
-    }
-    .tab {
-      flex: 1;
-      padding: 8px 0;
-      text-align: center;
-      font-size: 13px;
-      font-weight: 510;
-      color: var(--text-tertiary);
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      transition: all 0.2s;
-      border: none;
-      background: transparent;
-    }
-    .tab.active {
-      background: var(--accent);
-      color: white;
-    }
-    .tab:active { opacity: 0.8; }
-    
-    /* Entry List */
-    .entries {
-      padding: 0 16px;
-      padding-bottom: 80px;
-    }
-    .entry-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      padding: 14px 16px;
-      margin-bottom: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .entry-card:active {
-      background: var(--bg-hover);
-      transform: scale(0.99);
-    }
-    .entry-title {
-      font-size: 15px;
-      font-weight: 510;
-      letter-spacing: -0.165px;
-      margin-bottom: 4px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .entry-preview {
-      font-size: 13px;
-      color: var(--text-tertiary);
-      line-height: 1.5;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .entry-meta {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-      font-size: 11px;
-      color: var(--text-muted);
-      font-weight: 510;
-    }
-    .entry-tags {
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
-      margin-top: 6px;
-    }
-    .tag {
-      font-size: 10px;
-      font-weight: 510;
-      padding: 2px 8px;
-      border-radius: 9999px;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.03);
-      color: var(--text-secondary);
-      letter-spacing: 0.2px;
-    }
-    .entry-type { font-size: 14px; }
-    
-    /* Bottom Nav */
-    .bottom-nav {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      background: rgba(15,16,17,0.98);
-      backdrop-filter: blur(12px);
-      border-top: 1px solid var(--border-subtle);
-      display: flex;
-      padding: 6px 0;
-      padding-bottom: max(6px, env(safe-area-inset-bottom));
-    }
-    .nav-item {
-      flex: 1;
-      text-align: center;
-      padding: 6px 0;
-      cursor: pointer;
-      border: none;
-      background: transparent;
-      color: var(--text-muted);
-      transition: color 0.2s;
-    }
-    .nav-item.active { color: var(--accent-hover); }
-    .nav-icon { font-size: 20px; display: block; }
-    .nav-label { font-size: 9px; font-weight: 510; margin-top: 2px; letter-spacing: 0.3px; text-transform: uppercase; }
-    
-    /* Detail View */
-    .detail-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: var(--bg-primary);
-      z-index: 200;
-      overflow-y: auto;
-    }
-    .detail-overlay.open { display: block; }
-    .detail-header {
-      position: sticky;
-      top: 0;
-      background: rgba(8,9,10,0.95);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .back-btn {
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.03);
-      color: var(--text-primary);
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-    }
-    .detail-body { padding: 16px; }
-    .detail-title {
-      font-size: 22px;
-      font-weight: 510;
-      letter-spacing: -0.3px;
-      margin-bottom: 8px;
-    }
-    .detail-date {
-      font-size: 12px;
-      color: var(--text-muted);
-      font-weight: 510;
-      margin-bottom: 16px;
-    }
-    .detail-text {
-      font-size: 15px;
-      line-height: 1.65;
-      color: var(--text-secondary);
-      margin-bottom: 20px;
-    }
-    .detail-actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 20px;
-    }
-    .detail-btn {
-      padding: 8px 16px;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--border);
-      background: rgba(255,255,255,0.03);
-      color: var(--text-primary);
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 510;
-      font-family: inherit;
-    }
-    .detail-btn.primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: white;
-    }
-    .detail-btn.danger {
-      border-color: var(--danger);
-      color: var(--danger);
-    }
-    
-    /* Loading */
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: var(--text-muted);
-      font-size: 14px;
-    }
-    .loading-spinner {
-      width: 24px;
-      height: 24px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin: 0 auto 12px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    
-    /* Empty State */
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: var(--text-tertiary);
-    }
-    .empty-icon { font-size: 48px; margin-bottom: 12px; }
-    .empty-title { font-size: 18px; font-weight: 510; margin-bottom: 8px; }
-    .empty-desc { font-size: 14px; line-height: 1.5; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Второй Мозг</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root {
+  --bg: #08090a;
+  --surface: #121314;
+  --card: #1a1b1e;
+  --card-hover: #222326;
+  --border: rgba(255,255,255,0.06);
+  --text: #f0f2f4;
+  --text-secondary: #9ea3ae;
+  --text-muted: #5c6169;
+  --accent: #6c78e6;
+  --accent-hover: #8a94ff;
+  --accent-glow: rgba(108,120,230,0.15);
+  --green: #34d399;
+  --red: #f87171;
+  --orange: #fbbf24;
+  --radius: 12px;
+  --radius-sm: 8px;
+  font-family: 'Inter',-apple-system,sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  padding-bottom: 72px;
+}
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,9,10,0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.header-title { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; flex: 1; }
+.header-emoji { font-size: 22px; }
+.header-sub { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+
+/* Search */
+.search-wrap {
+  padding: 12px 16px;
+  position: sticky; top: 53px; z-index: 99;
+  background: var(--bg);
+}
+.search-wrap input {
+  width: 100%; padding: 11px 16px 11px 42px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px; font-family: inherit;
+  outline: none; transition: border .2s;
+}
+.search-wrap input:focus { border-color: var(--accent); }
+.search-wrap input::placeholder { color: var(--text-muted); }
+.search-icon {
+  position: absolute; left: 28px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px; pointer-events: none;
+}
+
+/* Stats row */
+.stats-row {
+  display: flex; gap: 8px;
+  padding: 0 16px 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.stat-pill {
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 500;
+}
+.stat-pill .val { color: var(--accent); font-weight: 700; font-size: 16px; }
+
+/* Entry cards */
+.entries { padding: 0 16px; }
+.entry-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background .15s, transform .1s;
+  position: relative;
+}
+.entry-card:active {
+  background: var(--card-hover);
+  transform: scale(0.99);
+}
+.entry-card .title {
+  font-size: 15px; font-weight: 600;
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 4px;
+}
+.entry-card .preview {
+  font-size: 13px; color: var(--text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.entry-card .meta {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 8px;
+  font-size: 11px; color: var(--text-muted); font-weight: 500;
+}
+.entry-card .tags {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  margin-top: 6px;
+}
+.tag {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-glow);
+  color: var(--accent);
+  letter-spacing: 0.2px;
+}
+
+/* Detail overlay */
+.detail {
+  display: none;
+  position: fixed; inset: 0;
+  background: var(--bg);
+  z-index: 200;
+  overflow-y: auto;
+  animation: slideUp .25s ease;
+}
+.detail.open { display: block; }
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.detail-header {
+  position: sticky; top: 0;
+  background: rgba(8,9,10,0.95);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.back-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.detail-body { padding: 16px; }
+.detail-body .dt { font-size: 22px; font-weight: 600; letter-spacing: -0.4px; margin-bottom: 6px; }
+.detail-body .dd { font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+.detail-body .dc { font-size: 15px; line-height: 1.7; color: var(--text-secondary); margin-bottom: 20px; white-space: pre-wrap; }
+.detail-body .dtags { margin-bottom: 16px; }
+.detail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.detail-actions button {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; font-family: inherit;
+}
+.detail-actions .primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.detail-actions .danger { border-color: var(--red); color: var(--red); }
+
+/* Bottom nav */
+.nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: rgba(18,19,20,0.98);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding: 4px 0;
+  padding-bottom: max(4px,env(safe-area-inset-bottom));
+  z-index: 100;
+}
+.nav-item {
+  flex: 1;
+  text-align: center;
+  padding: 6px 0;
+  cursor: pointer;
+  border: none; background: transparent;
+  color: var(--text-muted);
+  transition: color .15s;
+  position: relative;
+}
+.nav-item.active { color: var(--accent); }
+.nav-item.active::after {
+  content: ''; position: absolute; top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 20px; height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.nav-icon { font-size: 20px; display: block; }
+.nav-label { font-size: 9px; font-weight: 600; margin-top: 1px; letter-spacing: 0.3px; }
+
+/* Pages */
+.page { display: none; }
+.page.active { display: block; }
+
+/* Loading */
+.loading {
+  text-align: center; padding: 40px; color: var(--text-muted);
+}
+.spinner {
+  width: 22px; height: 22px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 0 auto 10px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Empty */
+.empty {
+  text-align: center; padding: 60px 20px; color: var(--text-muted);
+}
+.empty .icon { font-size: 42px; margin-bottom: 12px; }
+.empty .t { font-size: 17px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+.empty .d { font-size: 14px; line-height: 1.5; }
+
+/* Folders list */
+.folder-list { padding: 0 16px; }
+.folder-item {
+  display: flex; align-items: center;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.folder-item:active { background: var(--card-hover); }
+.folder-item .fi { font-size: 24px; margin-right: 12px; }
+.folder-item .fn { flex: 1; font-weight: 500; font-size: 15px; }
+.folder-item .fc { color: var(--text-muted); font-size: 13px; font-weight: 500; }
+
+/* Support form */
+.support-form { padding: 16px; }
+.support-form textarea {
+  width: 100%; padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px; font-family: inherit;
+  outline: none; resize: vertical;
+  min-height: 120px;
+}
+.support-form textarea:focus { border-color: var(--accent); }
+.support-form .send-btn {
+  width: 100%; padding: 12px;
+  margin-top: 12px;
+  border-radius: var(--radius);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 15px; font-weight: 600;
+  cursor: pointer; font-family: inherit;
+}
+.support-form .send-btn:active { opacity: .8; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 84px; left: 16px; right: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  text-align: center;
+  font-size: 14px; font-weight: 500;
+  z-index: 300;
+  animation: toastIn .3s ease;
+  display: none;
+}
+.toast.show { display: block; }
+@keyframes toastIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* Settings page */
+.settings-page { padding: 16px; }
+.setting-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+.setting-card .sl { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+.setting-card .sv { font-size: 15px; font-weight: 500; }
+
+/* Tags cloud */
+.tags-cloud {
+  padding: 0 16px;
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.tag-cloud-item {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer;
+  transition: background .15s;
+}
+.tag-cloud-item:active { background: var(--card-hover); }
+
+/* Back from folder entries */
+.back-row {
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 500;
+  font-size: 14px;
+}
+</style>
 </head>
 <body>
-  <!-- Header -->
-  <div class="header">
-    <span class="header-emoji">🧠</span>
-    <span class="header-title">Второй Мозг</span>
-    <div class="header-actions">
-      <button class="icon-btn" onclick="refreshData()">↻</button>
-      <button class="icon-btn" onclick="Telegram.WebApp.close()">✕</button>
-    </div>
-  </div>
-  
-  <!-- Search -->
-  <div class="search-bar">
+
+<!-- Header -->
+<div class="header">
+  <span class="header-emoji" id="headerEmoji">🧠</span>
+  <span class="header-title" id="headerTitle">Второй Мозг</span>
+  <span class="header-sub" id="headerSub"></span>
+</div>
+
+<!-- Page: Home -->
+<div class="page active" id="pageHome">
+  <div class="search-wrap">
     <span class="search-icon">🔍</span>
-    <input type="text" id="searchInput" placeholder="Поиск по смыслу..." oninput="debouncedSearch()">
+    <input type="text" id="searchInput" placeholder="Поиск по смыслу..." oninput="onSearch()">
   </div>
-  
-  <!-- Quick Stats -->
-  <div class="quick-stats" id="quickStats"></div>
-  
-  <!-- Tabs -->
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('all')">Всё</button>
-    <button class="tab" onclick="switchTab('favorites')">⭐ Избранное</button>
-    <button class="tab" onclick="switchTab('tasks')">📋 Задачи</button>
-    <button class="tab" onclick="switchTab('recent')">🕐 Недавние</button>
+  <div class="stats-row" id="statsRow"></div>
+  <div class="entries" id="entriesList"></div>
+</div>
+
+<!-- Page: Search Results -->
+<div class="page" id="pageSearch">
+  <div class="entries" id="searchResults"></div>
+</div>
+
+<!-- Page: Folders -->
+<div class="page" id="pageFolders">
+  <div class="folder-list" id="foldersList"></div>
+</div>
+
+<!-- Page: Folder entries -->
+<div class="page" id="pageFolderEntries">
+  <div class="back-row" onclick="showPage('pageFolders')">← Назад к папкам</div>
+  <div class="entries" id="folderEntriesList"></div>
+</div>
+
+<!-- Page: Favorites -->
+<div class="page" id="pageFavorites">
+  <div class="entries" id="favoritesList"></div>
+</div>
+
+<!-- Page: Settings -->
+<div class="page" id="pageSettings">
+  <div class="settings-page" id="settingsContent"></div>
+  <div class="support-form">
+    <h3 style="font-size:16px;font-weight:600;margin-bottom:12px">💬 Поддержка / Идеи</h3>
+    <textarea id="feedbackText" placeholder="Опишите проблему или предложение..."></textarea>
+    <button class="send-btn" onclick="sendFeedback()">Отправить</button>
   </div>
-  
-  <!-- Entries -->
-  <div class="entries" id="entries"></div>
-  
-  <!-- Detail View -->
-  <div class="detail-overlay" id="detailOverlay">
-    <div class="detail-header">
-      <button class="back-btn" onclick="closeDetail()">←</button>
-      <span class="header-title" id="detailHeaderTitle">Запись</span>
-    </div>
-    <div class="detail-body" id="detailBody"></div>
+</div>
+
+<!-- Detail overlay -->
+<div class="detail" id="detailOverlay">
+  <div class="detail-header">
+    <button class="back-btn" onclick="closeDetail()">←</button>
+    <span class="header-title" id="detailTitle">Запись</span>
   </div>
+  <div class="detail-body" id="detailBody"></div>
+</div>
+
+<!-- Bottom Nav -->
+<div class="nav">
+  <button class="nav-item active" onclick="switchTab('home')">
+    <span class="nav-icon">🏠</span>
+    <span class="nav-label">Главная</span>
+  </button>
+  <button class="nav-item" onclick="switchTab('folders')">
+    <span class="nav-icon">📂</span>
+    <span class="nav-label">Папки</span>
+  </button>
+  <button class="nav-item" onclick="switchTab('favorites')">
+    <span class="nav-icon">⭐</span>
+    <span class="nav-label">Избранное</span>
+  </button>
+  <button class="nav-item" onclick="switchTab('settings')">
+    <span class="nav-icon">⚙️</span>
+    <span class="nav-label">Ещё</span>
+  </button>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://golubot.ru/mindzip/';
+let tg = window.Telegram.WebApp;
+tg.expand();
+tg.ready();
+
+let state = {
+  user: null,
+  dbId: null,
+  entries: [],
+  folders: [],
+  tags: [],
+  stats: null,
+  currentEntry: null,
+  folderEntries: [],
+  currentFolderId: null,
+};
+
+// === AUTH ===
+async function auth() {
+  // Try Telegram initData first
+  let userId = null;
+  const initData = tg.initData;
   
-  <!-- Bottom Nav -->
-  <div class="bottom-nav">
-    <button class="nav-item active" onclick="switchPage('home')">
-      <span class="nav-icon">🏠</span>
-      <span class="nav-label">Главная</span>
-    </button>
-    <button class="nav-item" onclick="switchPage('folders')">
-      <span class="nav-icon">📂</span>
-      <span class="nav-label">Папки</span>
-    </button>
-    <button class="nav-item" onclick="switchPage('stats')">
-      <span class="nav-icon">📊</span>
-      <span class="nav-label">Статистика</span>
-    </button>
-    <button class="nav-item" onclick="switchPage('settings')">
-      <span class="nav-icon">⚙️</span>
-      <span class="nav-label">Настройки</span>
-    </button>
-  </div>
-  
-  <script>
-	    // API-запросы идут через серверный прокси (не напрямую с токеном на фронте)
-	    let tg = window.Telegram.WebApp;
-    tg.expand();
-    tg.ready();
-    
-    let entries = [];
-    let currentTab = 'all';
-    let isLoading = false;
-    
-    // Init
-    document.addEventListener('DOMContentLoaded', () => {
-      loadEntries();
-      if (tg.initDataUnsafe?.start_param) {
-        // Deep link handling
+  if (initData) {
+    try {
+      const resp = await fetch(API + 'auth?init_data=' + encodeURIComponent(initData));
+      const data = await resp.json();
+      if (data.registered) {
+        state.user = data;
+        state.dbId = data.db_id;
       }
+      userId = data.user_id;
+    } catch(e) {
+      console.log('Auth error:', e);
+    }
+  }
+  
+  // Fallback: try initDataUnsafe
+  if (!state.user && tg.initDataUnsafe?.user) {
+    userId = tg.initDataUnsafe.user.id;
+  }
+  
+  // Last resort: prompt (for testing outside Telegram)
+  if (!userId) {
+    userId = prompt('Введите ваш Telegram ID:');
+  }
+  
+  if (userId) {
+    // Try to find user by telegram_id
+    try {
+      const resp = await fetch(API + 'stats?user_id=' + userId);
+      const stats = await resp.json();
+      state.stats = stats;
+      state.dbId = userId;
+      state.user = { user_id: parseInt(userId), registered: true };
+    } catch(e) {
+      console.log('Stats fetch error:', e);
+    }
+  }
+  
+  loadData();
+}
+
+// === DATA ===
+async function loadData() {
+  if (!state.dbId) return;
+  
+  try {
+    const [entriesResp, foldersResp, tagsResp, statsResp] = await Promise.all([
+      fetch(API + 'entries?user_id=' + state.dbId + '&limit=100'),
+      fetch(API + 'folders?user_id=' + state.dbId),
+      fetch(API + 'tags?user_id=' + state.dbId),
+      fetch(API + 'stats?user_id=' + state.dbId),
+    ]);
+    
+    const entriesData = await entriesResp.json();
+    const foldersData = await foldersResp.json();
+    const tagsData = await tagsResp.json();
+    const statsData = await statsResp.json();
+    
+    state.entries = entriesData.entries || [];
+    state.folders = foldersData.folders || [];
+    state.tags = tagsData.tags || [];
+    state.stats = statsData;
+    
+    renderHome();
+    renderFolders();
+    renderFavorites();
+    renderSettings();
+  } catch(e) {
+    showToast('Ошибка загрузки данных');
+  }
+}
+
+// === RENDER: Home ===
+function renderHome() {
+  // Stats
+  const s = state.stats;
+  if (s) {
+    document.getElementById('statsRow').innerHTML = `
+      <div class="stat-pill"><span class="val">${s.total}</span> Записей</div>
+      <div class="stat-pill"><span class="val">${s.favorites}</span> ⭐</div>
+      <div class="stat-pill"><span class="val">${s.this_week}</span> За неделю</div>
+    `;
+  }
+  
+  renderEntries(state.entries, 'entriesList');
+}
+
+function renderEntries(arr, containerId) {
+  const el = document.getElementById(containerId);
+  if (!arr.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📝</div><div class="t">Пока нет записей</div><div class="d">Отправь сообщение боту — всё сохранится</div></div>';
+    return;
+  }
+  
+  const typeEmoji = { text:'📝', voice:'🎤', photo:'📷', video:'🎥', link:'🔗', file:'📎', forwarded:'📨' };
+  
+  el.innerHTML = arr.map(e => {
+    const em = typeEmoji[e.content_type] || '📄';
+    const d = new Date(e.created_at).toLocaleDateString('ru-RU', { day:'numeric', month:'short' });
+    const prev = (e.content_text || '').slice(0, 150);
+    const tags = (e.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
+    const fav = e.is_favorite ? '<span style="color:var(--orange)">⭐</span>' : '';
+    
+    return `<div class="entry-card" onclick="openDetail(${e.id})">
+      <div class="title"><span>${em}</span> ${esc(e.title||'Без названия')} ${fav}</div>
+      <div class="preview">${esc(prev)}</div>
+      ${tags ? `<div class="tags">${tags}</div>` : ''}
+      <div class="meta"><span>${d}</span>${e.folder ? ' · '+esc(e.folder.icon)+' '+esc(e.folder.name) : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+// === RENDER: Folders ===
+function renderFolders() {
+  const el = document.getElementById('foldersList');
+  if (!state.folders.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📂</div><div class="t">Нет папок</div></div>';
+    return;
+  }
+  el.innerHTML = state.folders.map(f =>
+    `<div class="folder-item" onclick="openFolder(${f.id})">
+      <span class="fi">${f.icon}</span>
+      <span class="fn">${esc(f.name)}</span>
+      <span class="fc">${f.count} зап.</span>
+    </div>`
+  ).join('');
+}
+
+async function openFolder(id) {
+  state.currentFolderId = id;
+  try {
+    const r = await fetch(API + 'entries?user_id=' + state.dbId + '&folder_id=' + id + '&limit=100');
+    const d = await r.json();
+    state.folderEntries = d.entries || [];
+    
+    const folder = state.folders.find(f => f.id === id);
+    document.getElementById('headerTitle').textContent = (folder ? folder.icon + ' ' + folder.name : 'Папка');
+    
+    renderEntries(state.folderEntries, 'folderEntriesList');
+    showPage('pageFolderEntries');
+  } catch(e) {
+    showToast('Ошибка загрузки');
+  }
+}
+
+// === RENDER: Favorites ===
+function renderFavorites() {
+  const fav = state.entries.filter(e => e.is_favorite);
+  renderEntries(fav, 'favoritesList');
+}
+
+// === RENDER: Settings ===
+function renderSettings() {
+  const s = state.stats;
+  if (!s) return;
+  
+  const typeEmoji = { text:'📝', voice:'🎤', photo:'📷', video:'🎥', link:'🔗', file:'📎', forwarded:'📨' };
+  const types = Object.entries(s.by_type || {}).map(([t,c]) =>
+    `<div class="setting-card"><div class="sl">${typeEmoji[t]||'📄'} ${t}</div><div class="sv">${c} зап.</div></div>`
+  ).join('');
+  
+  document.getElementById('settingsContent').innerHTML = `
+    <div class="setting-card"><div class="sl">🧠 Всего записей</div><div class="sv">${s.total}</div></div>
+    <div class="setting-card"><div class="sl">⭐ В избранном</div><div class="sv">${s.favorites}</div></div>
+    <div class="setting-card"><div class="sl">📅 За неделю</div><div class="sv">${s.this_week}</div></div>
+    <div style="margin-top:16px"></div>
+    ${types}
+  `;
+}
+
+// === SEARCH ===
+let searchTimer;
+function onSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(doSearch, 300);
+}
+
+async function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) {
+    renderHome();
+    return;
+  }
+  
+  try {
+    const r = await fetch(API + 'entries?user_id=' + state.dbId + '&search=' + encodeURIComponent(q) + '&limit=50');
+    const d = await r.json();
+    renderEntries(d.entries || [], 'searchResults');
+    showPage('pageSearch');
+    document.getElementById('headerTitle').textContent = '🔍 Результаты';
+  } catch(e) {
+    showToast('Ошибка поиска');
+  }
+}
+
+// === DETAIL ===
+function openDetail(id) {
+  const entry = state.entries.find(e => e.id === id) || state.folderEntries.find(e => e.id === id);
+  if (!entry) return;
+  state.currentEntry = entry;
+  
+  const tg = window.Telegram.WebApp;
+  if (tg.BackButton) tg.BackButton.show();
+  
+  document.getElementById('detailTitle').textContent = entry.title || 'Запись';
+  
+  const d = new Date(entry.created_at).toLocaleDateString('ru-RU', {
+    day:'numeric', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'
+  });
+  
+  const tags = (entry.tags || []).map(t => `<span class="tag" style="margin-right:4px">#${t}</span>`).join('');
+  const folder = entry.folder ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">📂 ${esc(entry.folder.icon)} ${esc(entry.folder.name)}</div>` : '';
+  
+  let actions = '';
+  if (entry.source_url) actions += `<a href="${entry.source_url}" target="_blank"><button class="primary">🔗 Открыть ссылку</button></a> `;
+  actions += `<button onclick="copyText('${esc(entry.content_text||'')}')">📋 Копировать</button>`;
+  
+  document.getElementById('detailBody').innerHTML = `
+    <div class="dt">${esc(entry.title||'Без названия')}</div>
+    <div class="dd">${d} · ID: ${entry.id}</div>
+    ${folder}
+    <div class="dc">${esc(entry.content_text||'')}</div>
+    ${tags ? `<div class="dtags">${tags}</div>` : ''}
+    <div class="detail-actions">${actions}</div>
+  `;
+  
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+  const tg = window.Telegram.WebApp;
+  if (tg.BackButton) tg.BackButton.hide();
+}
+
+function copyText(t) {
+  navigator.clipboard.writeText(t).then(() => showToast('✅ Скопировано')).catch(() => showToast('Ошибка копирования'));
+}
+
+// === FEEDBACK ===
+async function sendFeedback() {
+  const text = document.getElementById('feedbackText').value.trim();
+  if (!text) { showToast('Напишите сообщение'); return; }
+  
+  try {
+    const r = await fetch(API + 'feedback', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        user_id: state.user?.user_id || 0,
+        username: tg.initDataUnsafe?.user?.username || '',
+        text: text,
+        topic: 'Mini App'
+      })
     });
-    
-    async function loadEntries() {
-      if (isLoading) return;
-      isLoading = true;
-      
-      const container = document.getElementById('entries');
-      container.innerHTML = '<div class="loading"><div class="loading-spinner"></div>Загрузка...</div>';
-      
-      try {
-        // For demo, generate mock data
-        const mockEntries = generateMockEntries();
-        entries = mockEntries;
-        renderEntries(mockEntries);
-        renderStats(mockEntries);
-      } catch(e) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">😕</div><div class="empty-title">Ошибка загрузки</div><div class="empty-desc">Не удалось загрузить записи</div></div>';
-      } finally {
-        isLoading = false;
-      }
+    const d = await r.json();
+    if (d.ok) {
+      showToast('✅ Сообщение отправлено');
+      document.getElementById('feedbackText').value = '';
+    } else {
+      showToast('❌ Ошибка отправки');
     }
-    
-    function renderStats(data) {
-      const statsHtml = `
-        <div class="stat-card">
-          <div class="stat-value">${data.length}</div>
-          <div class="stat-label">Записей</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${data.filter(e => e.is_favorite).length}</div>
-          <div class="stat-label">⭐ Избранное</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${data.filter(e => e.is_task).length}</div>
-          <div class="stat-label">📋 Задачи</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">${data.filter(e => e.tags?.length || 0 > 0).length}</div>
-          <div class="stat-label">🏷️ С тегами</div>
-        </div>
-      `;
-      document.getElementById('quickStats').innerHTML = statsHtml;
-    }
-    
-    function renderEntries(data) {
-      const container = document.getElementById('entries');
-      
-      if (!data.length) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">📝</div>
-            <div class="empty-title">Пока нет записей</div>
-            <div class="empty-desc">Отправь сообщение боту — всё сохранится автоматически</div>
-          </div>`;
-        return;
-      }
-      
-      const typeEmojis = { text: '📝', voice: '🎤', photo: '📷', video: '🎥', link: '🔗', file: '📎', forwarded: '📨' };
-      
-      let html = '';
-      data.slice(0, 50).forEach(e => {
-        const emoji = typeEmojis[e.content_type] || '📄';
-        const date = new Date(e.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-        const preview = (e.content_text || '').slice(0, 150);
-        
-        html += `
-          <div class="entry-card" onclick="openDetail(${e.id})">
-            <div class="entry-title">
-              <span class="entry-type">${emoji}</span>
-              <span>${e.title || 'Без названия'}</span>
-              ${e.is_favorite ? '<span style="color:var(--warning)">⭐</span>' : ''}
-            </div>
-            <div class="entry-preview">${escapeHtml(preview)}</div>
-            ${e.tags?.length ? `<div class="entry-tags">${e.tags.map(t => `<span class="tag">#${t}</span>`).join('')}</div>` : ''}
-            <div class="entry-meta">
-              <span>${date}</span>
-              ${e.is_task ? '<span>📋</span>' : ''}
-            </div>
-          </div>`;
-      });
-      
-      container.innerHTML = html;
-    }
-    
-    function openDetail(id) {
-      const entry = entries.find(e => e.id === id);
-      if (!entry) return;
-      
-      document.getElementById('detailHeaderTitle').textContent = entry.title || 'Запись';
-      
-      const date = new Date(entry.created_at).toLocaleDateString('ru-RU', {
-        day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
-      
-      document.getElementById('detailBody').innerHTML = `
-        <div class="detail-title">${escapeHtml(entry.title || 'Без названия')}</div>
-        <div class="detail-date">${date} &middot; ID: ${entry.id}</div>
-        <div class="detail-text">${escapeHtml(entry.content_text || 'Нет текста')}</div>
-        ${entry.tags?.length ? `<div style="margin-bottom:16px"><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:510">ТЕГИ</div>${entry.tags.map(t => `<span class="tag" style="margin-right:4px">#${t}</span>`).join('')}</div>` : ''}
-        <div class="detail-actions">
-          ${entry.content_type === 'link' && entry.source_url ? `<a href="${entry.source_url}" target="_blank"><button class="detail-btn primary">🔗 Открыть ссылку</button></a>` : ''}
-          <button class="detail-btn" onclick="toggleFavorite(${entry.id})">${entry.is_favorite ? '⭐ Убрать' : '⭐ В избранное'}</button>
-          <button class="detail-btn" onclick="copyText(${entry.id})">📋 Копировать</button>
-          <button class="detail-btn danger" onclick="deleteEntry(${entry.id})">🗑️ Удалить</button>
-        </div>
-      `;
-      
-      document.getElementById('detailOverlay').classList.add('open');
-    }
-    
-    function closeDetail() {
-      document.getElementById('detailOverlay').classList.remove('open');
-    }
-    
-    function switchTab(tab) {
-      currentTab = tab;
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab')[['all', 'favorites', 'tasks', 'recent'].indexOf(tab)].classList.add('active');
-      
-      let filtered = [...entries];
-      if (tab === 'favorites') filtered = filtered.filter(e => e.is_favorite);
-      if (tab === 'tasks') filtered = filtered.filter(e => e.is_task);
-      if (tab === 'recent') filtered = filtered.sort((a,b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 20);
-      
-      renderEntries(filtered);
-    }
-    
-    function switchPage(page) {
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.querySelectorAll('.nav-item')[['home', 'folders', 'stats', 'settings'].indexOf(page)].classList.add('active');
-      // Page switching logic
-    }
-    
-    // Search with debounce
-    let searchTimer;
-    function debouncedSearch() {
-      clearTimeout(searchTimer);
-      searchTimer = setTimeout(doSearch, 300);
-    }
-    
-    function doSearch() {
-      const query = document.getElementById('searchInput').value.toLowerCase().trim();
-      if (!query) {
-        renderEntries(entries);
-        return;
-      }
-      
-      const results = entries.filter(e => {
-        const searchTarget = ((e.title || '') + ' ' + (e.content_text || '') + ' ' + (e.tags || []).join(' ')).toLowerCase();
-        return searchTarget.includes(query);
-      });
-      
-      renderEntries(results);
-    }
-    
-    function toggleFavorite(id) {
-      const entry = entries.find(e => e.id === id);
-      if (entry) {
-        entry.is_favorite = !entry.is_favorite;
-        renderEntries(entries);
-        renderStats(entries);
-        closeDetail();
-      }
-    }
-    
-    function copyText(id) {
-      const entry = entries.find(e => e.id === id);
-      if (entry?.content_text) {
-        navigator.clipboard.writeText(entry.content_text);
-        tg.showPopup({ title: '✅ Скопировано', message: 'Текст скопирован в буфер обмена' });
-      }
-    }
-    
-    function deleteEntry(id) {
-      tg.showConfirm('Удалить эту запись?', (confirmed) => {
-        if (confirmed) {
-          entries = entries.filter(e => e.id !== id);
-          renderEntries(entries);
-          renderStats(entries);
-          closeDetail();
-        }
-      });
-    }
-    
-    function refreshData() {
-      loadEntries();
-    }
-    
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-    
-    // Mock data generator
-    function generateMockEntries() {
-      const types = ['text', 'voice', 'photo', 'link', 'forwarded'];
-      const tags = ['идеи', 'работа', 'бизнес', 'покупки', 'книги', 'ml', 'стартап', 'здоровье', 'спорт', 'образование'];
-      const titles = [
-        'Идея стартапа нейросеть для диет',
-        'Рецепт пасты карбонара',
-        'Мысли про бизнес модель',
-        'Статья про ML обучения моделей',
-        'Купить продукты на неделю',
-        'Позвонить маме в пятницу',
-        'Идея для подарка другу',
-        'Конспект книги Atomic Habits',
-        'План тренировок на неделю',
-        'Ссылка на статью про нейросети',
-        'Мысли о переезде в другой город',
-        'Список фильмов к просмотру'
-      ];
-      
-      return Array.from({length: 25}, (_, i) => {
-        const date = new Date();
-        date.setDate(date.getDate() - Math.floor(Math.random() * 30));
-        date.setHours(Math.floor(Math.random() * 24), Math.floor(Math.random() * 60));
-        
-        const entryTags = [];
-        for (let j = 0; j < 1 + Math.floor(Math.random() * 4); j++) {
-          const t = tags[Math.floor(Math.random() * tags.length)];
-          if (!entryTags.includes(t)) entryTags.push(t);
-        }
-        
-        return {
-          id: i + 1,
-          title: titles[i % titles.length],
-          content_text: `Lorem ipsum dolor sit amet consectetur adipiscing elit. ${titles[i % titles.length]} sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`,
-          content_type: types[Math.floor(Math.random() * types.length)],
-          created_at: date.toISOString(),
-          is_favorite: Math.random() > 0.7,
-          is_task: Math.random() > 0.8,
-          tags: entryTags,
-          source_url: i % 3 === 0 ? 'https://example.com' : null
-        };
-      }).sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-    }
-  </script>
+  } catch(e) {
+    showToast('❌ Ошибка отправки');
+  }
+}
+
+// === NAV ===
+function switchTab(tab) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-item')[['home','folders','favorites','settings'].indexOf(tab)].classList.add('active');
+  
+  document.getElementById('headerTitle').textContent = 
+    ({home:'Второй Мозг', folders:'📂 Папки', favorites:'⭐ Избранное', settings:'⚙️ Настройки'})[tab];
+  
+  if (tab === 'home') renderHome();
+  if (tab === 'favorites') renderFavorites();
+  if (tab === 'settings') renderSettings();
+  
+  showPage('page' + tab.charAt(0).toUpperCase() + tab.slice(1));
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// === TOAST ===
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// === UTILS ===
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// === INIT ===
+auth();
+</script>
 </body>
 </html>
