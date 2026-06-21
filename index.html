@@ -855,15 +855,29 @@ function downloadICS(id) {
 
 function showFriends() {
   let text = '👥 <b>Друзья</b>\n\n';
-  if (!state.friends || !state.friends.length) {
-    text += 'У тебя пока нет друзей.\n';
-  } else {
-    state.friends.forEach((f,i) => { text += (i+1) + '. ID: ' + f + '\n'; });
-  }
-  text += '\n/add_friend ID — добавить друга в боте';
-  text += '\n\n/share_folder ID_ПАПКИ ID_ДРУГА — открыть общую папку';
+  text += (state.friends||[]).map((f,i) => (i+1) + '. ID: ' + f + '\n').join('') || 'Пока нет друзей.\n';
   document.getElementById('settingsContent').innerHTML = 
-    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;color:var(--accent)" onclick="renderSettings()">← Назад</div>' +
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;color:var(--accent)" onclick="renderSettings(\'friends\')">← Назад</div>' +
+    '<div class="setting-card" style="white-space:pre-wrap">' + text + '</div>';
+}
+
+function addFriend() {
+  const id = document.getElementById('friendIdInput').value.trim();
+  if (!id || !/^\\d+$/.test(id)) { showToast('❌ Введите корректный Telegram ID'); return; }
+  // Open bot with add_friend command
+  tg.openTelegramLink('https://t.me/mindzip_bot?start=add_' + id);
+  showToast('✅ Открываю бота для добавления');
+}
+
+function showSharedFolders() {
+  let text = '📂 <b>Общие папки</b>\n\n';
+  if (!state.sharedFolders || !state.sharedFolders.length) {
+    text += 'Нет общих папок.\nОткрой папку в боте: /share_folder';
+  } else {
+    state.sharedFolders.forEach(f => { text += f.icon + ' ' + f.name + '\n'; });
+  }
+  document.getElementById('settingsContent').innerHTML = 
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;color:var(--accent)" onclick="renderSettings(\'friends\')">← Назад</div>' +
     '<div class="setting-card" style="white-space:pre-wrap">' + text + '</div>';
 }
 
@@ -921,15 +935,12 @@ function renderSettings(tab) {
     const friendsCount = (state.friends||[]).length;
     const sharedCount = (state.sharedFolders||[]).length;
     html += `
-      <div class="setting-card" style="cursor:pointer" onclick="showFriends()"><div class="sl">👥 Друзья (${friendsCount})</div><div class="sv">${friendsCount ? friendsCount + ' друзей' : 'Нет друзей'}</div></div>
-      <div class="setting-card" style="cursor:pointer" onclick="showSharedFolders()"><div class="sl">📂 Общие папки</div><div class="sv">${sharedCount ? sharedCount + ' папок' : 'Нет общих папок'}</div></div>
-      <div style="margin-top:12px;padding:12px;background:var(--surface);border-radius:8px;font-size:13px;color:var(--text-secondary);line-height:1.6">
-        <b>Как добавить друга:</b><br>
-        1. Узнай Telegram ID друга (через @userinfobot)<br>
-        2. Напиши боту: /add_friend 123456789<br>
-        3. Друг подтверждает: /accept_friend ТВОЙ_ID<br>
-        4. Делитесь папками: /share_folder ID_ПАПКИ ID_ДРУГА
+      <div class="setting-card"><div class="sl">👥 Друзья</div><div class="sv">${friendsCount ? friendsCount + ' друзей' : 'Нет друзей'}</div></div>
+      <div style="display:flex;gap:8px;margin:8px 0">
+        <input id="friendIdInput" placeholder="Telegram ID друга" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;outline:none">
+        <button onclick="addFriend()" style="padding:10px 16px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-family:inherit">➕ Добавить</button>
       </div>
+      <div class="setting-card" style="cursor:pointer" onclick="showSharedFolders()"><div class="sl">📂 Общие папки</div><div class="sv">${sharedCount ? sharedCount + ' папок' : 'Нет'}</div></div>
     `;
   } else if (tab === 'referral') {
     html += '<div id="referralContent"><div class="loading"><div class="spinner"></div></div></div>';
