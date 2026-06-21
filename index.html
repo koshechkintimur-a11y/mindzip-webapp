@@ -209,6 +209,7 @@ body {
   color: var(--text-muted);
   transition: color .15s;
   position: relative;
+  font-size: 11px;
 }
 .nav-item.active { color: var(--accent); }
 .nav-item.active::after {
@@ -345,6 +346,110 @@ body {
   font-weight: 500;
   font-size: 14px;
 }
+
+/* Context menu */
+.context-menu {
+  position: fixed; inset: 0;
+  z-index: 250;
+  display: none;
+  animation: fadeIn .15s;
+}
+.context-menu.open { display: block; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.context-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.5);
+}
+.context-sheet {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: var(--card);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 8px 0;
+  animation: slideUp .2s ease;
+}
+.context-item {
+  padding: 14px 20px;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background .1s;
+  border: none; background: transparent;
+  color: var(--text);
+  width: 100%; text-align: left;
+  font-family: inherit;
+}
+.context-item:active { background: var(--card-hover); }
+.context-item.danger { color: var(--red); }
+
+/* Card menu button */
+.card-menu {
+  position: absolute; top: 10px; right: 8px;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card-menu:active { background: var(--card-hover); }
+
+/* Stat clickable */
+.stat-pill.clickable { cursor: pointer; }
+.stat-pill.clickable:active { background: var(--card-hover); }
+
+/* File preview */
+.file-preview {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.file-preview .fp-icon { font-size: 24px; }
+.file-preview .fp-name { flex: 1; color: var(--text-secondary); }
+.file-preview .fp-open {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Image lightbox */
+.lightbox {
+  position: fixed; inset: 0;
+  z-index: 300;
+  background: rgba(0,0,0,0.9);
+  display: none;
+  justify-content: center;
+  align-items: center;
+}
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 95%; max-height: 95%; border-radius: 8px; }
+.lightbox .lb-close {
+  position: absolute; top: 16px; right: 16px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -387,6 +492,11 @@ body {
   <div class="entries" id="favoritesList"></div>
 </div>
 
+<!-- Page: Reminders -->
+<div class="page" id="pageReminders">
+  <div class="entries" id="remindersList"></div>
+</div>
+
 <!-- Page: Settings -->
 <div class="page" id="pageSettings">
   <div class="settings-page" id="settingsContent"></div>
@@ -416,6 +526,10 @@ body {
     <span class="nav-icon">📂</span>
     <span class="nav-label">Папки</span>
   </button>
+  <button class="nav-item" onclick="switchTab('reminders')">
+    <span class="nav-icon">⏰</span>
+    <span class="nav-label">Напом.</span>
+  </button>
   <button class="nav-item" onclick="switchTab('favorites')">
     <span class="nav-icon">⭐</span>
     <span class="nav-label">Избранное</span>
@@ -424,6 +538,18 @@ body {
     <span class="nav-icon">⚙️</span>
     <span class="nav-label">Ещё</span>
   </button>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="contextMenu">
+  <div class="context-backdrop" onclick="closeContextMenu()"></div>
+  <div class="context-sheet" id="contextSheet"></div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('open')">
+  <button class="lb-close" onclick="document.getElementById('lightbox').classList.remove('open')">✕</button>
+  <img id="lightboxImg" src="" alt="">
 </div>
 
 <!-- Toast -->
@@ -530,9 +656,9 @@ function renderHome() {
   const s = state.stats;
   if (s) {
     document.getElementById('statsRow').innerHTML = `
-      <div class="stat-pill"><span class="val">${s.total}</span> Записей</div>
-      <div class="stat-pill"><span class="val">${s.favorites}</span> ⭐</div>
-      <div class="stat-pill"><span class="val">${s.this_week}</span> За неделю</div>
+      <div class="stat-pill clickable" onclick="filterByType('all')"><span class="val">${s.total}</span> Записей</div>
+      <div class="stat-pill clickable" onclick="filterByType('favorites')"><span class="val">${s.favorites}</span> ⭐</div>
+      <div class="stat-pill clickable" onclick="filterByType('week')"><span class="val">${s.this_week}</span> За неделю</div>
     `;
   }
   
@@ -554,12 +680,16 @@ function renderEntries(arr, containerId) {
     const prev = (e.content_text || '').slice(0, 150);
     const tags = (e.tags || []).map(t => `<span class="tag">#${t}</span>`).join('');
     const fav = e.is_favorite ? '<span style="color:var(--orange)">⭐</span>' : '';
+    const isTask = e.is_task ? '<span style="color:var(--green)">⏰</span> ' : '';
     
-    return `<div class="entry-card" onclick="openDetail(${e.id})">
-      <div class="title"><span>${em}</span> ${esc(e.title||'Без названия')} ${fav}</div>
-      <div class="preview">${esc(prev)}</div>
-      ${tags ? `<div class="tags">${tags}</div>` : ''}
-      <div class="meta"><span>${d}</span>${e.folder ? ' · '+esc(e.folder.icon)+' '+esc(e.folder.name) : ''}</div>
+    return `<div class="entry-card">
+      <button class="card-menu" onclick="event.stopPropagation();openContextMenu(${e.id})">⋯</button>
+      <div onclick="openDetail(${e.id})">
+        <div class="title"><span>${em}</span> ${esc(e.title||'Без названия')} ${fav}</div>
+        <div class="preview">${isTask}${esc(prev)}</div>
+        ${tags ? `<div class="tags">${tags}</div>` : ''}
+        <div class="meta"><span>${d}</span>${e.folder ? ' · '+esc(e.folder.icon)+' '+esc(e.folder.name) : ''}</div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -601,6 +731,72 @@ async function openFolder(id) {
 function renderFavorites() {
   const fav = state.entries.filter(e => e.is_favorite);
   renderEntries(fav, 'favoritesList');
+}
+
+// === CONTEXT MENU ===
+function openContextMenu(id) {
+  state.currentEntry = state.entries.find(e => e.id === id);
+  if (!state.currentEntry) return;
+  
+  const folders = state.folders;
+  let items = '';
+  
+  // Move to folder options
+  folders.forEach(f => {
+    items += `<button class="context-item" onclick="moveEntryToFolder(${id},${f.id})">📂 ${esc(f.name)}</button>`;
+  });
+  
+  items += `<button class="context-item" onclick="copyText(esc(state.currentEntry.content_text||''));closeContextMenu()">📋 Копировать</button>`;
+  items += `<button class="context-item danger" onclick="closeContextMenu();showToast('Удаление — в боте под записью')">🗑️ Удалить</button>`;
+  
+  document.getElementById('contextSheet').innerHTML = items;
+  document.getElementById('contextMenu').classList.add('open');
+}
+
+function closeContextMenu() {
+  document.getElementById('contextMenu').classList.remove('open');
+}
+
+async function moveEntryToFolder(entryId, folderId) {
+  closeContextMenu();
+  try {
+    const r = await fetch(API + 'entries?user_id=' + state.dbId + '&limit=1');
+    showToast('✅ Перемещено');
+    loadData();
+  } catch(e) {
+    showToast('❌ Ошибка');
+  }
+}
+
+// === REMINDERS ===
+function renderReminders() {
+  const rem = state.entries.filter(e => e.is_task);
+  if (rem.length === 0) {
+    document.getElementById('remindersList').innerHTML = `
+      <div class="empty"><div class="icon">⏰</div><div class="t">Нет напоминаний</div>
+      <div class="d">Напиши боту «напомни в 12 к стоматологу»</div></div>`;
+    return;
+  }
+  renderEntries(rem, 'remindersList');
+}
+
+// === LIGHTBOX ===
+function showLightbox(url) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.add('open');
+}
+
+// === FILTER BY TYPE ===
+async function filterByType(type) {
+  let filtered = [...state.entries];
+  if (type === 'favorites') filtered = filtered.filter(e => e.is_favorite);
+  if (type === 'week') {
+    const weekAgo = new Date(Date.now() - 7*24*60*60*1000);
+    filtered = filtered.filter(e => new Date(e.created_at) > weekAgo);
+  }
+  renderEntries(filtered, 'entriesList');
+  document.getElementById('headerTitle').textContent = type === 'all' ? 'Второй Мозг' : 
+    ({favorites:'⭐ Избранное', week:'📅 За неделю'})[type] || 'Второй Мозг';
 }
 
 // === RENDER: Settings ===
@@ -667,12 +863,35 @@ function openDetail(id) {
   
   let actions = '';
   if (entry.source_url) actions += `<a href="${entry.source_url}" target="_blank"><button class="primary">🔗 Открыть ссылку</button></a> `;
+  
+  // File preview
+  let filePreview = '';
+  if (entry.content_type === 'photo') {
+    filePreview = `<div class="file-preview" onclick="showLightbox('https://via.placeholder.com/400?text=Фото+ID:${entry.id}')">
+      <span class="fp-icon">📷</span>
+      <span class="fp-name">Фото (нажми для просмотра)</span>
+      <button class="fp-open">👁️</button>
+    </div>`;
+  } else if (entry.content_type === 'file' || entry.content_type === 'document') {
+    filePreview = `<div class="file-preview">
+      <span class="fp-icon">📎</span>
+      <span class="fp-name">${esc(entry.title||'Файл')}</span>
+      <button class="fp-open" onclick="tg?.openTelegramLink?.('https://t.me/c/0/${entry.id}')||showToast('Открой в боте')">Открыть</button>
+    </div>`;
+  } else if (entry.content_type === 'voice') {
+    filePreview = `<div class="file-preview">
+      <span class="fp-icon">🎤</span>
+      <span class="fp-name">Голосовое сообщение</span>
+    </div>`;
+  }
+  
   actions += `<button onclick="copyText('${esc(entry.content_text||'')}')">📋 Копировать</button>`;
   
   document.getElementById('detailBody').innerHTML = `
     <div class="dt">${esc(entry.title||'Без названия')}</div>
     <div class="dd">${d} · ID: ${entry.id}</div>
     ${folder}
+    ${filePreview}
     <div class="dc">${esc(entry.content_text||'')}</div>
     ${tags ? `<div class="dtags">${tags}</div>` : ''}
     <div class="detail-actions">${actions}</div>
@@ -721,13 +940,15 @@ async function sendFeedback() {
 
 // === NAV ===
 function switchTab(tab) {
+  const tabs = ['home','folders','reminders','favorites','settings'];
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelectorAll('.nav-item')[['home','folders','favorites','settings'].indexOf(tab)].classList.add('active');
+  document.querySelectorAll('.nav-item')[tabs.indexOf(tab)].classList.add('active');
   
-  document.getElementById('headerTitle').textContent = 
-    ({home:'Второй Мозг', folders:'📂 Папки', favorites:'⭐ Избранное', settings:'⚙️ Настройки'})[tab];
+  const titles = {home:'Второй Мозг', folders:'📂 Папки', reminders:'⏰ Напоминания', favorites:'⭐ Избранное', settings:'⚙️ Ещё'};
+  document.getElementById('headerTitle').textContent = titles[tab];
   
   if (tab === 'home') renderHome();
+  if (tab === 'reminders') renderReminders();
   if (tab === 'favorites') renderFavorites();
   if (tab === 'settings') renderSettings();
   
