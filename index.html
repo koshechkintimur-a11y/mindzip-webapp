@@ -751,9 +751,14 @@ function renderFolders() {
 function showCreateFolder() {
   const name = prompt('Название новой папки:');
   if (!name || !name.trim()) return;
-  fetch(API + 'entries?user_id=' + state.dbId + '&limit=1').then(() => {
-    showToast('✅ Отправь боту: /create_folder ' + encodeURIComponent(name.trim()));
-  });
+  fetch(API + 'create_folder', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({user_id: state.dbId, name: name.trim()})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) { showToast('✅ Папка «' + name + '» создана!'); loadData(); }
+    else { showToast('❌ Ошибка создания'); }
+  }).catch(() => showToast('❌ Ошибка'));
 }
 
 function showSharedFolders() {
@@ -849,14 +854,17 @@ function downloadICS(id) {
 }
 
 function showFriends() {
-  let text = '👥 <b>Друзья</b>\\n\\n';
+  let text = '👥 <b>Друзья</b>\n\n';
   if (!state.friends || !state.friends.length) {
-    text += 'У тебя пока нет друзей.\\n';
+    text += 'У тебя пока нет друзей.\n';
   } else {
-    state.friends.forEach((f,i) => { text += (i+1) + '. ID: ' + f + '\\n'; });
+    state.friends.forEach((f,i) => { text += (i+1) + '. ID: ' + f + '\n'; });
   }
-  text += '\\n/add_friend ID — добавить друга в боте';
-  document.getElementById('settingsContent').innerHTML = '<div class="setting-card" style="white-space:pre-wrap">' + text + '</div><button class="send-btn" onclick="renderSettings()" style="margin-top:8px">Назад</button>';
+  text += '\n/add_friend ID — добавить друга в боте';
+  text += '\n\n/share_folder ID_ПАПКИ ID_ДРУГА — открыть общую папку';
+  document.getElementById('settingsContent').innerHTML = 
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;cursor:pointer;color:var(--accent)" onclick="renderSettings()">← Назад</div>' +
+    '<div class="setting-card" style="white-space:pre-wrap">' + text + '</div>';
 }
 
 // === FILTER BY TYPE ===
@@ -957,14 +965,14 @@ function openDetail(id) {
     filePreview = `<div class="file-preview">
       <span class="fp-icon">📎</span>
       <span class="fp-name">${esc(entry.title||'Файл')}</span>
-      <button class="fp-open" onclick="window.open('${fileUrl}','_blank')">Открыть</button>
+      <button class="fp-open" onclick="tg.openLink?.('${fileUrl}')||window.open('${fileUrl}','_blank')">📄 Открыть</button>
     </div>`;
   } else if (entry.content_type === 'voice') {
     const fileUrl = API + 'file/' + entry.id + '?user_id=' + state.dbId;
     filePreview = `<div class="file-preview">
       <span class="fp-icon">🎤</span>
       <span class="fp-name">Голосовое</span>
-      <button class="fp-open" onclick="window.open('${fileUrl}','_blank')">▶</button>
+      <button class="fp-open" onclick="tg.openLink?.('${fileUrl}')||window.open('${fileUrl}','_blank')">▶</button>
     </div>`;
   }
   
