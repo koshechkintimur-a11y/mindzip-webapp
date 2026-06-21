@@ -588,7 +588,7 @@ async function auth() {
       const data = await resp.json();
       if (data.registered) {
         state.user = data;
-        state.dbId = data.db_id;
+        state.dbId = data.user_id;
       }
       userId = data.user_id;
     } catch(e) {
