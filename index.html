@@ -854,8 +854,8 @@ function openContextMenu(id) {
     items += `<button class="context-item" onclick="moveEntryToFolder(${id},${f.id})">📂 ${esc(f.name)}</button>`;
   });
   
-  items += `<button class="context-item" onclick="copyText(esc(state.currentEntry.content_text||''));closeContextMenu()">📋 Копировать</button>`;
-  items += `<button class="context-item danger" onclick="closeContextMenu();showToast('Удаление — в боте под записью')">🗑️ Удалить</button>`;
+  items += `<button class="context-item" onclick="copyText(state.currentEntry?.content_text||'');closeContextMenu()">📋 Копировать</button>`;
+  items += `<button class="context-item danger" onclick="deleteEntryFromMiniApp(${id})">🗑️ Удалить запись</button>`;
   
   document.getElementById('contextSheet').innerHTML = items;
   document.getElementById('contextMenu').classList.add('open');
@@ -939,6 +939,36 @@ async function moveEntryToFolder(entryId, folderId) {
     loadData();
   } catch(e) {
     showToast('❌ Ошибка');
+  }
+}
+
+// === DELETE ENTRY FROM MINI APP ===
+async function deleteEntryFromMiniApp(id) {
+  closeContextMenu();
+  if (!confirm('🗑️ Удалить запись навсегда?')) return;
+  try {
+    const r = await fetch(API + 'entries/delete', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({user_id: state.dbId, entry_id: id})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      state.entries = state.entries.filter(e => e.id !== id);
+      state.folderEntries = state.folderEntries.filter(e => e.id !== id);
+      showToast('✅ Запись удалена');
+      const activePage = document.querySelector('.page.active');
+      if (activePage) {
+        if (activePage.id === 'pageHome') renderHome();
+        else if (activePage.id === 'pageFolderEntries') renderEntries(state.folderEntries, 'folderEntriesList');
+        else if (activePage.id === 'pageFavorites') renderFavorites();
+        else if (activePage.id === 'pageReminders') renderReminders();
+      }
+    } else {
+      showToast('❌ Ошибка удаления');
+    }
+  } catch(e) {
+    showToast('❌ Ошибка удаления');
   }
 }
 
@@ -1074,8 +1104,29 @@ async function filterByType(type) {
     // Фильтр по конкретному типу контента
     filtered = filtered.filter(e => e.content_type === type);
   }
+  // Показываем на главной (но без вызова renderHome, который сбросит фильтр)
   renderEntries(filtered, 'entriesList');
+  // Скрываем statsRow при фильтрации
+  document.getElementById('statsRow').style.display = 'none';
   document.getElementById('headerTitle').textContent = type === 'all' ? 'Второй Мозг' : '📁 ' + typeLabel(type);
+  // Показываем кнопку "Назад"
+  const entriesList = document.getElementById('entriesList');
+  const backBtn = document.createElement('div');
+  backBtn.id = 'filterBackBtn';
+  backBtn.className = 'back-row';
+  backBtn.innerHTML = '← Все записи';
+  backBtn.onclick = function() {
+    document.getElementById('statsRow').style.display = 'flex';
+    const btn = document.getElementById('filterBackBtn');
+    if (btn) btn.remove();
+    renderHome();
+    document.getElementById('headerTitle').textContent = 'Второй Мозг';
+  };
+  const existing = document.getElementById('filterBackBtn');
+  if (!existing) {
+    entriesList.parentNode.insertBefore(backBtn, entriesList);
+  }
+  showPage('pageHome');
 }
 
 // === RENDER: Settings ===
@@ -1090,6 +1141,7 @@ function renderSettings(tab) {
   const tabs = [
     {id:'stats', label:'📊 Статистика'},
     {id:'friends', label:'👥 Друзья'},
+    {id:'support', label:'💬 Поддержка'},
   ];
   
   let html = '<div style="display:flex;gap:4px;margin-bottom:12px;overflow-x:auto">';
@@ -1103,13 +1155,13 @@ function renderSettings(tab) {
   if (tab === 'stats') {
     const typeEmoji = { text:'📝', voice:'🎤', photo:'📷', video:'🎥', link:'🔗', file:'📎', forwarded:'📨' };
     const types = Object.entries(s.by_type || {}).map(([t,c]) =>
-      `<div class="setting-card" style="cursor:pointer" onclick="filterByType('${t}');switchTab('home')"><div class="sl">${typeEmoji[t]||'📄'} ${typeLabel(t)}</div><div class="sv">${c} зап.</div></div>`
+      `<div class="setting-card" style="cursor:pointer" onclick="filterByType('${t}')"><div class="sl">${typeEmoji[t]||'📄'} ${typeLabel(t)}</div><div class="sv">${c} зап.</div></div>`
     ).join('');
     
     html += `
-      <div class="setting-card" style="cursor:pointer" onclick="filterByType('all');switchTab('home')"><div class="sl">🧠 Всего записей</div><div class="sv">${s.total}</div></div>
-      <div class="setting-card" style="cursor:pointer" onclick="filterByType('favorites');switchTab('home')"><div class="sl">⭐ В избранном</div><div class="sv">${s.favorites}</div></div>
-      <div class="setting-card" style="cursor:pointer" onclick="filterByType('week');switchTab('home')"><div class="sl">📅 За неделю</div><div class="sv">${s.this_week}</div></div>
+      <div class="setting-card" style="cursor:pointer" onclick="filterByType('all')"><div class="sl">🧠 Всего записей</div><div class="sv">${s.total}</div></div>
+      <div class="setting-card" style="cursor:pointer" onclick="filterByType('favorites')"><div class="sl">⭐ В избранном</div><div class="sv">${s.favorites}</div></div>
+      <div class="setting-card" style="cursor:pointer" onclick="filterByType('week')"><div class="sl">📅 За неделю</div><div class="sv">${s.this_week}</div></div>
       <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--text-muted);letter-spacing:.5px">ПО ТИПАМ</div>
       ${types}
     `;
@@ -1148,13 +1200,17 @@ function renderSettings(tab) {
     
   } else if (tab === 'support') {
     html += `
-      <div style="padding:4px 0;font-size:14px;font-weight:500;margin-bottom:8px">📬 Связь с разработчиком</div>
-      <textarea id="feedbackText" placeholder="Опишите проблему или отправьте скриншот..." style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;outline:none;min-height:100px;resize:vertical"></textarea>
+      <div style="padding:4px 0;font-size:14px;font-weight:500;margin-bottom:8px">📬 Связь с поддержкой</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Напиши нам — можно прикрепить скриншот. Ответ придёт в бота @mindzip_support_bot</div>
+      <textarea id="feedbackText" placeholder="Опишите проблему или предложение..." style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit;outline:none;min-height:100px;resize:vertical"></textarea>
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button onclick="attachFile()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;cursor:pointer;font-family:inherit">📎 Прикрепить файл</button>
+        <button onclick="document.getElementById('feedbackFileInput').click()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;cursor:pointer;font-family:inherit">📎 Прикрепить файл</button>
         <button onclick="sendFeedback()" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">📤 Отправить</button>
       </div>
-      <input type="file" id="fileInput" style="display:none" onchange="handleFileAttach(event)">
+      <input type="file" id="feedbackFileInput" style="display:none" onchange="handleFeedbackFile(event)">
+      <div style="margin-top:12px;padding:12px;background:var(--surface);border-radius:8px;font-size:12px;color:var(--text-muted)">
+        💬 Или напиши боту напрямую: @mindzip_support_bot
+      </div>
     `;
   }
   
@@ -1177,7 +1233,33 @@ function inviteFriend() {
   showToast('✅ Выбери друга в Telegram');
 }
 
-// Feedback moved to bot — напишите боту @mindzip_support_bot
+// Feedback to support bot
+function sendFeedback() {
+  const text = document.getElementById('feedbackText').value.trim();
+  if (!text) { showToast('Напишите сообщение'); return; }
+  fetch(API + 'feedback', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      user_id: state.user?.user_id || 0,
+      username: tg.initDataUnsafe?.user?.username || '',
+      text: text,
+      topic: 'Mini App'
+    })
+  }).then(r=>r.json()).then(d => {
+    if (d.ok) { showToast('✅ Сообщение отправлено в поддержку'); document.getElementById('feedbackText').value = ''; }
+    else { showToast('❌ Ошибка отправки'); }
+  }).catch(() => showToast('❌ Ошибка отправки'));
+}
+
+let feedbackFile = null;
+function handleFeedbackFile(event) {
+  const file = event.target.files[0];
+  if (file) {
+    feedbackFile = file;
+    showToast('📎 Файл: ' + file.name);
+  }
+}
 
 // === SEARCH ===
 let searchTimer;
