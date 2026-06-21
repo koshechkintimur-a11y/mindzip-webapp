@@ -623,23 +623,38 @@ async function auth() {
 async function loadData() {
   if (!state.dbId) return;
   
+  // Get user's timezone from Telegram
+  const userTz = tg.initDataUnsafe?.user?.language_code === 'ru' ? 'Europe/Moscow' : 'Europe/Moscow';
+  
   try {
-    const [entriesResp, foldersResp, tagsResp, statsResp] = await Promise.all([
-      fetch(API + 'entries?user_id=' + state.dbId + '&limit=100'),
+    const [entriesResp, foldersResp, tagsResp, statsResp, friendsResp] = await Promise.all([
+      fetch(API + 'entries_timezone?user_id=' + state.dbId + '&limit=100&tz=' + userTz),
       fetch(API + 'folders?user_id=' + state.dbId),
       fetch(API + 'tags?user_id=' + state.dbId),
       fetch(API + 'stats?user_id=' + state.dbId),
+      fetch(API + 'friends?user_id=' + state.dbId).catch(() => ({json:()=>({friends:[]})})),
     ]);
     
     const entriesData = await entriesResp.json();
     const foldersData = await foldersResp.json();
     const tagsData = await tagsResp.json();
     const statsData = await statsResp.json();
+    const friendsData = friendsResp ? await friendsResp.json() : {friends:[]};
     
     state.entries = entriesData.entries || [];
     state.folders = foldersData.folders || [];
     state.tags = tagsData.tags || [];
     state.stats = statsData;
+    state.friends = friendsData.friends || [];
+    
+    // Load shared folders
+    try {
+      const sharedResp = await fetch(API + 'shared_folders?user_id=' + state.dbId);
+      const sharedData = await sharedResp.json();
+      state.sharedFolders = sharedData.folders || [];
+    } catch(e) {
+      state.sharedFolders = [];
+    }
     
     renderHome();
     renderFolders();
@@ -697,17 +712,52 @@ function renderEntries(arr, containerId) {
 // === RENDER: Folders ===
 function renderFolders() {
   const el = document.getElementById('foldersList');
+  let html = '<div style="padding:8px 0;display:flex;gap:8px">';
+  html += '<button onclick="showCreateFolder()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">➕ Создать папку</button>';
+  if (state.friends && state.friends.length) {
+    html += '<button onclick="showSharedFolders()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--accent);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit">👥 Общие</button>';
+  }
+  html += '</div>';
+  
   if (!state.folders.length) {
-    el.innerHTML = '<div class="empty"><div class="icon">📂</div><div class="t">Нет папок</div></div>';
+    html += '<div class="empty"><div class="icon">📂</div><div class="t">Нет папок</div><div class="d">Создай первую папку</div></div>';
+    el.innerHTML = html;
     return;
   }
-  el.innerHTML = state.folders.map(f =>
+  
+  // Show shared folders at top
+  if (state.sharedFolders && state.sharedFolders.length) {
+    html += '<div style="font-size:12px;color:var(--text-muted);padding:8px 0 4px;font-weight:500">ОБЩИЕ ПАПКИ</div>';
+    state.sharedFolders.forEach(f => {
+      html += `<div class="folder-item" onclick="openSharedFolder(${f.id})">
+        <span class="fi">📁</span>
+        <span class="fn">${esc(f.name)} 🔗</span>
+        <span class="fc">Общая</span>
+      </div>`;
+    });
+  }
+  
+  html += '<div style="font-size:12px;color:var(--text-muted);padding:8px 0 4px;font-weight:500">МОИ ПАПКИ</div>';
+  html += state.folders.map(f =>
     `<div class="folder-item" onclick="openFolder(${f.id})">
       <span class="fi">${f.icon}</span>
       <span class="fn">${esc(f.name)}</span>
       <span class="fc">${f.count} зап.</span>
     </div>`
   ).join('');
+  el.innerHTML = html;
+}
+
+function showCreateFolder() {
+  const name = prompt('Название новой папки:');
+  if (!name || !name.trim()) return;
+  fetch(API + 'entries?user_id=' + state.dbId + '&limit=1').then(() => {
+    showToast('✅ Отправь боту: /create_folder ' + encodeURIComponent(name.trim()));
+  });
+}
+
+function showSharedFolders() {
+  showToast('👥 Общие папки в разработке. Используй /share_folder в боте');
 }
 
 async function openFolder(id) {
@@ -786,6 +836,29 @@ function showLightbox(url) {
   document.getElementById('lightbox').classList.add('open');
 }
 
+function downloadICS(id) {
+  const entry = state.entries.find(e => e.id === id);
+  if (!entry || !entry.due_date) return;
+  const ics = 'BEGIN:VCALENDAR\\nVERSION:2.0\\nBEGIN:VEVENT\\nSUMMARY:' + (entry.title||'Reminder') + '\\nDTSTART:' + entry.due_date.replace(/[^0-9T]/g,'') + '\\nEND:VEVENT\\nEND:VCALENDAR';
+  const blob = new Blob([ics], {type:'text/calendar'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'reminder.ics';
+  a.click();
+  showToast('✅ Скачан .ics файл');
+}
+
+function showFriends() {
+  let text = '👥 <b>Друзья</b>\\n\\n';
+  if (!state.friends || !state.friends.length) {
+    text += 'У тебя пока нет друзей.\\n';
+  } else {
+    state.friends.forEach((f,i) => { text += (i+1) + '. ID: ' + f + '\\n'; });
+  }
+  text += '\\n/add_friend ID — добавить друга в боте';
+  document.getElementById('settingsContent').innerHTML = '<div class="setting-card" style="white-space:pre-wrap">' + text + '</div><button class="send-btn" onclick="renderSettings()" style="margin-top:8px">Назад</button>';
+}
+
 // === FILTER BY TYPE ===
 async function filterByType(type) {
   let filtered = [...state.entries];
@@ -809,12 +882,20 @@ function renderSettings() {
     `<div class="setting-card"><div class="sl">${typeEmoji[t]||'📄'} ${t}</div><div class="sv">${c} зап.</div></div>`
   ).join('');
   
+  const friendsCount = (state.friends||[]).length;
+  const sharedCount = (state.sharedFolders||[]).length;
+  
   document.getElementById('settingsContent').innerHTML = `
-    <div class="setting-card"><div class="sl">🧠 Всего записей</div><div class="sv">${s.total}</div></div>
-    <div class="setting-card"><div class="sl">⭐ В избранном</div><div class="sv">${s.favorites}</div></div>
-    <div class="setting-card"><div class="sl">📅 За неделю</div><div class="sv">${s.this_week}</div></div>
-    <div style="margin-top:16px"></div>
+    <div class="setting-card" style="cursor:pointer" onclick="filterByType('all');switchTab('home')"><div class="sl">🧠 Всего записей</div><div class="sv">${s.total}</div></div>
+    <div class="setting-card" style="cursor:pointer" onclick="filterByType('favorites');switchTab('home')"><div class="sl">⭐ В избранном</div><div class="sv">${s.favorites}</div></div>
+    <div class="setting-card" style="cursor:pointer" onclick="filterByType('week');switchTab('home')"><div class="sl">📅 За неделю</div><div class="sv">${s.this_week}</div></div>
+    <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">По типам</div>
     ${types}
+    <div style="margin:16px 0 8px;font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">👥 Друзья</div>
+    <div class="setting-card" style="cursor:pointer" onclick="showFriends()"><div class="sl">👥 Друзья</div><div class="sv">${friendsCount ? friendsCount + ' друзей' : 'Нет друзей'}</div></div>
+    <div class="setting-card" style="cursor:pointer" onclick="showSharedFolders()"><div class="sl">📂 Общие папки</div><div class="sv">${sharedCount ? sharedCount + ' папок' : 'Нет общих папок'}</div></div>
+    <div class="setting-card" style="cursor:pointer;margin-top:16px" onclick="showToast('Используй /export_cal в боте')"><div class="sl">📅 Экспорт в календарь</div><div class="sv">.ics / Google Calendar</div></div>
+    <div class="setting-card" style="cursor:pointer" onclick="showToast('Напиши @mindzip_support_bot')"><div class="sl">💬 Поддержка</div><div class="sv">@mindzip_support_bot</div></div>
   `;
 }
 
@@ -833,11 +914,11 @@ async function doSearch() {
   }
   
   try {
-    const r = await fetch(API + 'entries?user_id=' + state.dbId + '&search=' + encodeURIComponent(q) + '&limit=50');
+    const r = await fetch(API + 'entries_timezone?user_id=' + state.dbId + '&limit=50&search=' + encodeURIComponent(q));
     const d = await r.json();
     renderEntries(d.entries || [], 'searchResults');
     showPage('pageSearch');
-    document.getElementById('headerTitle').textContent = '🔍 Результаты';
+    document.getElementById('headerTitle').textContent = '🔍 Результаты: ' + q;
   } catch(e) {
     showToast('Ошибка поиска');
   }
@@ -867,25 +948,36 @@ function openDetail(id) {
   // File preview
   let filePreview = '';
   if (entry.content_type === 'photo') {
-    filePreview = `<div class="file-preview" onclick="showLightbox('https://via.placeholder.com/400?text=Фото+ID:${entry.id}')">
-      <span class="fp-icon">📷</span>
-      <span class="fp-name">Фото (нажми для просмотра)</span>
-      <button class="fp-open">👁️</button>
+    const imgUrl = API + 'file/' + entry.id + '?user_id=' + state.dbId;
+    filePreview = `<div class="file-preview" style="flex-direction:column;padding:0;overflow:hidden" onclick="showLightbox('${imgUrl}')">
+      <img src="${imgUrl}" style="width:100%;max-height:300px;object-fit:cover;border-radius:8px" onerror="this.parentElement.innerHTML='<div style=\\'padding:14px\\'><span>📷 Фото</span></div>'">
     </div>`;
   } else if (entry.content_type === 'file' || entry.content_type === 'document') {
+    const fileUrl = API + 'file/' + entry.id + '?user_id=' + state.dbId;
     filePreview = `<div class="file-preview">
       <span class="fp-icon">📎</span>
       <span class="fp-name">${esc(entry.title||'Файл')}</span>
-      <button class="fp-open" onclick="tg?.openTelegramLink?.('https://t.me/c/0/${entry.id}')||showToast('Открой в боте')">Открыть</button>
+      <button class="fp-open" onclick="window.open('${fileUrl}','_blank')">Открыть</button>
     </div>`;
   } else if (entry.content_type === 'voice') {
+    const fileUrl = API + 'file/' + entry.id + '?user_id=' + state.dbId;
     filePreview = `<div class="file-preview">
       <span class="fp-icon">🎤</span>
-      <span class="fp-name">Голосовое сообщение</span>
+      <span class="fp-name">Голосовое</span>
+      <button class="fp-open" onclick="window.open('${fileUrl}','_blank')">▶</button>
     </div>`;
   }
   
+  // Calendar button for reminders
+  let calButton = '';
+  if (entry.is_task && entry.due_date) {
+    const gcalLink = 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(entry.title||'Напоминание') + '&dates=' + entry.due_date.replace(/[^0-9T]/g,'').slice(0,15) + '/' + entry.due_date.replace(/[^0-9T]/g,'').slice(0,15);
+    calButton = `<button onclick="window.open('${gcalLink}','_blank')">📅 Google</button> `;
+    calButton += `<button onclick="downloadICS(${entry.id})">📅 .ics</button> `;
+  }
+  
   actions += `<button onclick="copyText('${esc(entry.content_text||'')}')">📋 Копировать</button>`;
+  actions = calButton + actions;
   
   document.getElementById('detailBody').innerHTML = `
     <div class="dt">${esc(entry.title||'Без названия')}</div>
